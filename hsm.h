@@ -32,6 +32,9 @@ extern "C" {
 /* Add platform specific types here */
 #include <stdint.h>
 
+//#define HSM_FEATURE_DEBUG_EMBEDDED 1
+
+
 //----HSM OPTIONAL FEATURES SECTION[BEGIN]----
 // Enable for HSM debugging
 #define HSM_FEATURE_DEBUG_ENABLE            1

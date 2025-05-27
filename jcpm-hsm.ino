@@ -1,5 +1,3 @@
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_SSD1306.h>
 #include <Wire.h>
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
@@ -11,7 +9,6 @@
 
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
-
 
 
 // Define events of the system
@@ -91,6 +88,8 @@ constexpr int KEY23_ORDER = 5;
 const int32_t ENCODER_THRESHOLD = 3;  // Minimum encoder change to trigger an event
 
 #define DELAYVAL 500  // Time (in milliseconds) to pause between pixels
+
+//HSM_DEBUG_EVT2STR(x) (sprintf(This->buffer, "0x%lx", (unsigned long)(x)), This->buffer)
 
 int32_t getEncoder();
 
@@ -255,8 +254,8 @@ typedef struct JCPM_T {
   // Parent
   HSM parent;
   // Child members
-  //char param1;
-  //char param2;
+  char param1;
+  char param2;
 } JCPM;
 
 
@@ -275,8 +274,8 @@ Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 JCPM basic;
 HSM_STATE JCPM_StateMode1;
-HSM_STATE JCPM_StateOff;
-HSM_STATE JCPM_StateActOnDownEvent;
+HSM_STATE JCPM_StateMode2;
+HSM_STATE JCPM_StateTop;
 
 
 int32_t getEncoder() {
@@ -298,6 +297,104 @@ void KeyColorSet(int key, uint32_t c) {
   pixels.setPixelColor(key, c);
   pixels.show();  // Show results
 }
+
+HSM_EVENT JCPM_StateTopHandler(HSM* This, HSM_EVENT event, void* param) {
+  (void)param;
+
+  switch (event) {
+    case HSME_INIT:
+      return 0;
+    case HSME_ENTRY:
+      return 0;
+    case HSME_EXIT:
+      return 0;
+
+    case JCPM_EVT_K00_DOWN:
+      KeyColorSet(KEY00_ORDER, 0xFF0000);
+      break; //return 0;
+    case JCPM_EVT_K00_UP:
+      break; //return 0;
+
+    case JCPM_EVT_K01_DOWN:
+      KeyColorSet(KEY01_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K01_UP:
+      return 0;
+    case JCPM_EVT_K02_DOWN:
+      KeyColorSet(KEY02_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K02_UP:
+      return 0;
+    case JCPM_EVT_K03_DOWN:
+      KeyColorSet(KEY03_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K03_UP:
+      return 0;
+    case JCPM_EVT_K12_DOWN:
+      KeyColorSet(KEY12_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K12_UP:
+      return 0;
+    case JCPM_EVT_K13_DOWN:
+      KeyColorSet(KEY13_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K13_UP:
+      return 0;
+
+    case JCPM_EVT_K22_DOWN:
+      KeyColorSet(KEY22_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K22_UP:
+      return 0;
+    case JCPM_EVT_K23_DOWN:
+      KeyColorSet(KEY23_ORDER, 0xFF0000);
+      return 0;
+    case JCPM_EVT_K23_UP:
+      return 0;
+
+    case JCPM_EVT_ENC_UP:
+      HSM_Tran(This, &JCPM_StateMode1, 0, 0);
+      return 0;
+
+    case JCPM_EVT_TICK:
+      return 0;
+
+    default:
+      //Serial.print("Unhandled event in Top: ");
+      //Serial.println(event);
+      return 0; 
+  }
+  return 0;
+}
+
+
+HSM_EVENT JCPM_StateMode2Handler(HSM* This, HSM_EVENT event, void* param) {
+  (void)param;
+
+  switch (event) {
+    case HSME_ENTRY:
+      KeyColorsSet(0, 0, 255);
+      oled.clear();
+      oled.println("     Mode 2");
+      oled.println("Not implemented");
+      break;
+    case HSME_EXIT:
+      break;
+    case JCPM_EVT_ENC_UP:
+      HSM_Tran(This, &JCPM_StateMode1, 0, 0);
+      return 0;
+
+    case JCPM_EVT_TICK:
+      return 0;
+
+    default:
+      Serial.print("Unhandled event in Mode2: ");
+      Serial.println(event);
+      return event; // Pass the event up
+  }
+  return event;
+}
+
 void showModeOneScreen() 
 {
   oled.clear();
@@ -320,8 +417,8 @@ void clearMute(bool *muted, bool *muted_timer)
 }
 const int TICKS_PER_SECOND = 7;
 
+
 HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
-  (void)This;
   (void)param;
   static bool muted = false;
   static bool muted_timer = false;
@@ -330,6 +427,8 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
   static int key_down_count;
 
   switch (event) {
+    case HSME_INIT:
+      break;
     case HSME_ENTRY:
       KeyColorsSet(0, 255, 0);
       showModeOneScreen();
@@ -337,22 +436,20 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
     case HSME_EXIT:
       break;
     case JCPM_EVT_K00_DOWN:
-      KeyColorSet(KEY00_ORDER, 0xFF0000);
       Consumer.write(MEDIA_VOLUME_DOWN);
       clearMute(&muted, &muted_timer);
-      return 0;
+      break;
     case JCPM_EVT_K00_UP:
       KeyColorSet(KEY00_ORDER, 0x00FF00);
-      return 0;
+      break; //return 0;
 
     case JCPM_EVT_K01_DOWN:
-      KeyColorSet(KEY01_ORDER, 0xFF0000);
       Consumer.write(MEDIA_VOLUME_UP);
       clearMute(&muted, &muted_timer);      
-      return 0;
+      break;
     case JCPM_EVT_K01_UP:
       KeyColorSet(KEY01_ORDER, 0x00FF00);
-      return 0;
+      break;
 
     // Mute toggle, disable Mute Timer
     case JCPM_EVT_K02_DOWN:
@@ -369,7 +466,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       Consumer.write(MEDIA_VOLUME_MUTE);
       return 0;
     case JCPM_EVT_K02_UP:
-      return 0;
+      break;
 
     // Mute timer
     case JCPM_EVT_K03_DOWN:
@@ -386,45 +483,40 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
         muted_timer = true;
         muted_timer_ticks = TICKS_PER_SECOND * 30;
       }
-      KeyColorSet(KEY03_ORDER, 0xFF0000);
-      return 0;
+      break; //return 0;
     case JCPM_EVT_K03_UP:
-      //KeyColorSet(KEY03_ORDER, 0x00FF00);
-      return 0;
+      KeyColorSet(KEY03_ORDER, 0x00FF00);
+      break;
 
     // Play/Pause
     case JCPM_EVT_K12_DOWN:
-      KeyColorSet(KEY12_ORDER, 0xFF0000);
       Consumer.write(MEDIA_PLAY_PAUSE);
-      return 0;
+      break;
     case JCPM_EVT_K12_UP:
       KeyColorSet(KEY12_ORDER, 0x00FF00);
-      return 0;
+      break;
 
     // Next
     case JCPM_EVT_K13_DOWN:
       Consumer.write(MEDIA_NEXT);
-      KeyColorSet(KEY13_ORDER, 0xFF0000);
-      return 0;
+      break;
     case JCPM_EVT_K13_UP:
       KeyColorSet(KEY13_ORDER, 0x00FF00);
-      return 0;
+      break;
 
     case JCPM_EVT_K22_DOWN:
       key_down_timer = millis();
-      KeyColorSet(KEY22_ORDER, 0xFF0000);
-      return 0;
+      break;
     case JCPM_EVT_K22_UP:
       KeyColorSet(KEY22_ORDER, 0x00FF00);
       if (millis() - key_down_timer > 2000 &&
          millis() - key_down_timer < 3000)
       {
-        Keyboard.print("SanClemente23224");
+        //Keyboard.print("394361462693583308374033627891017182005269515746");
       }
-      return 0;
+      break;
 
     case JCPM_EVT_K23_DOWN:
-      KeyColorSet(KEY23_ORDER, 0xFF0000);
       key_down_timer = millis();
       if (millis() - key_down_timer < 100)
       {
@@ -439,18 +531,16 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       {
         key_down_count = 0;
       }
-
-      return 0;
+      break;
     case JCPM_EVT_K23_UP:
       KeyColorSet(KEY23_ORDER, 0x00FF00);
+      break;
 
-      return 0;
-
+    // Encoder events
     case JCPM_EVT_ENC_DOWN:
-      KeyColorSet(KEY23_ORDER, 0xFF0000);
-      return 0;
+      break;
     case JCPM_EVT_ENC_UP:
-      KeyColorSet(KEY23_ORDER, 0x00FF00);
+      HSM_Tran(This, &JCPM_StateMode2, 0, 0);
       return 0;
 
     case JCPM_EVT_VOL_DOWN:
@@ -472,11 +562,11 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
           KeyColorSet(KEY03_ORDER, 0x00FF00);
         }        
       }
-      
-      return 0;
+      break;
+
     default:
-      Serial.print("Unhandled event");
-      Serial.println(event);
+      //Serial.print("Unhandled event Mode1: ");
+      //Serial.println(event);
       return 0;
   }
   return event;
@@ -551,7 +641,9 @@ void setup() {
 
   KeyColorsSet(0, 100, 100);
 
-  HSM_STATE_Create(&JCPM_StateMode1, "Mode1", JCPM_StateMode1Handler, NULL);
+  HSM_STATE_Create(&JCPM_StateTop, "Top", JCPM_StateTopHandler, NULL);
+  HSM_STATE_Create(&JCPM_StateMode1, "Mode1", JCPM_StateMode1Handler, &JCPM_StateTop);
+  HSM_STATE_Create(&JCPM_StateMode2, "Mode2", JCPM_StateMode2Handler, &JCPM_StateTop);
 
   HSM_Create((HSM*)&basic, "JCPM", &JCPM_StateMode1);
 }
