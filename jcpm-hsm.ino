@@ -35,9 +35,10 @@ const HSM_EVENT JCPM_EVT_ENC_DOWN = (HSME_START + 19);
 const HSM_EVENT JCPM_EVT_ENC_UP   = (HSME_START + 20);
 const HSM_EVENT JCPM_EVT_VOL_DOWN = (HSME_START + 21);
 const HSM_EVENT JCPM_EVT_VOL_UP   = (HSME_START + 22);
+const HSM_EVENT JCPM_EVT_PATTERN_PRESS = (HSME_START + 23);
 
-const size_t MAX_EVENTS = 16;
-const size_t MAX_KEYS = 11;
+const int MAX_EVENTS = 16;
+const int MAX_KEYS = 11;
 
 
 // Key names are defined like a grid. Lower left is KEY00
@@ -88,8 +89,6 @@ constexpr int KEY23_ORDER = 5;
 const int32_t ENCODER_THRESHOLD = 3;  // Minimum encoder change to trigger an event
 
 #define DELAYVAL 500  // Time (in milliseconds) to pause between pixels
-
-//HSM_DEBUG_EVT2STR(x) (sprintf(This->buffer, "0x%lx", (unsigned long)(x)), This->buffer)
 
 int32_t getEncoder();
 
@@ -164,11 +163,11 @@ private:
 
   EventQueue& queue;     // Reference to the event queue
 
+public:
   // Array of event types for each switch (down and up)
   static const HSM_EVENT key_events[MAX_KEYS][2];
 
-public:
-  // Constructor initializes with all switches off and a reference to the event queue
+// Constructor initializes with all switches off and a reference to the event queue
   SwitchMonitor(EventQueue& event_queue)
     : prev_state(0), prev_encoder(0), queue(event_queue) {}
 
@@ -232,6 +231,94 @@ const HSM_EVENT SwitchMonitor::key_events[MAX_KEYS][2] = {
   { JCPM_EVT_ENC_DOWN, JCPM_EVT_ENC_UP },
   { JCPM_EVT_VOL_DOWN, JCPM_EVT_VOL_UP }
 };
+
+const uint32_t SHORT_PRESS_MAX_MS = 400; // Max duration for a short press
+const uint32_t LONG_PRESS_MIN_MS = 400;  // Min duration for a long press
+const uint32_t PATTERN_PRESS_TIMEOUT_MS = 2000; // Max time between presses in sequence
+
+// PatternPressDetector class to detect a user-specified press sequence
+class PatternPressDetector {
+private:
+    struct SwitchState {
+        uint32_t last_down_time; // Time of last KEY_DOWN
+        uint32_t last_press_duration; // Duration of last press
+        int press_count; // Number of presses in current sequence
+        uint32_t sequence_start_time; // Time of first press in sequence
+    };
+    SwitchState switch_states[MAX_KEYS]; // State for each switch
+    EventQueue& queue; // Reference to the event queue
+    const bool* pattern; // Pattern of short (false) and long (true) presses
+    int pattern_length; // Length of the pattern
+
+public:
+    PatternPressDetector(EventQueue& event_queue, const bool* press_pattern, size_t length)
+        : queue(event_queue), pattern(press_pattern), pattern_length(length) {
+        // Initialize state for all switches
+        for (int i = 0; i < MAX_KEYS; ++i) {
+            switch_states[i] = {0, 0, 0, 0};
+        }
+        // Validate pattern
+        if (length == 0 || press_pattern == nullptr) {
+            pattern_length = 0; // Disable detector
+        }
+    }
+
+    // Process an event and detect the specified press pattern
+    void processEvent(const Event& event) {
+        if (pattern_length == 0) {
+          return; // Disabled if pattern is invalid
+        }
+
+        int switch_id = event.event_id;
+        if (switch_id < 0 || switch_id > 10) {
+          return; // Ignore non-switch events
+        }
+
+        uint32_t current_time = millis();
+        SwitchState& state = switch_states[switch_id];
+
+        if (event.type == SwitchMonitor::key_events[switch_id][0]) { // KEY_DOWN
+            state.last_down_time = current_time;
+            //Serial.print("D");
+        } else if (event.type == SwitchMonitor::key_events[switch_id][1]) { // KEY_UP
+            //Serial.print("U");;
+            if (state.last_down_time == 0) return; // Ignore if no matching KEY_DOWN
+
+            // Calculate press duration
+            uint32_t duration = current_time - state.last_down_time;
+            state.last_press_duration = duration;
+
+            // Check if sequence has timed out
+            if (state.press_count > 0 && 
+                (current_time - state.sequence_start_time > PATTERN_PRESS_TIMEOUT_MS)) {
+                state.press_count = 0; // Reset sequence
+            }
+
+            // Check if current press matches the expected pattern
+            bool is_long_press = duration > LONG_PRESS_MIN_MS;
+            bool expected_long = (state.press_count < pattern_length) ? pattern[state.press_count] : false;
+
+            if ((is_long_press && expected_long) || (!is_long_press && !expected_long)) {
+                if (state.press_count == 0) {
+                    state.sequence_start_time = current_time;
+                }
+                state.press_count++;
+                // Check if pattern is complete
+                if (state.press_count == pattern_length) {
+                    if (!queue.registerEvent(JCPM_EVT_PATTERN_PRESS, switch_id)) {
+                        Serial.print("Failed to register PATTERN_PRESS event for switch ");
+                        Serial.println(switch_id);
+                    }
+                    state.press_count = 0; // Reset sequence
+                }
+            } else {
+                state.press_count = 0; // Reset if pattern doesn't match
+            }
+            state.last_down_time = 0; // Reset down time
+        }
+    }
+};
+
 
 
 
@@ -299,8 +386,15 @@ void KeyColorSet(int key, uint32_t c) {
 }
 
 HSM_EVENT JCPM_StateTopHandler(HSM* This, HSM_EVENT event, void* param) {
-  (void)param;
+  uint32_t down_color = 0xFF0000; // Default color for keys
+  uint32_t up_color   = 0x00FF00; // Default color for keys
 
+  char sub_state = reinterpret_cast<JCPM*>(This)->param1;
+  if (sub_state == 2) {
+    down_color = 0xFF0000;
+    up_color   = 0x0000FF;
+  }
+  
   switch (event) {
     case HSME_INIT:
       return 0;
@@ -310,46 +404,57 @@ HSM_EVENT JCPM_StateTopHandler(HSM* This, HSM_EVENT event, void* param) {
       return 0;
 
     case JCPM_EVT_K00_DOWN:
-      KeyColorSet(KEY00_ORDER, 0xFF0000);
-      break; //return 0;
+      KeyColorSet(KEY00_ORDER, down_color);
+      return 0;
     case JCPM_EVT_K00_UP:
-      break; //return 0;
-
+      KeyColorSet(KEY00_ORDER, up_color);
+      return 0;
     case JCPM_EVT_K01_DOWN:
-      KeyColorSet(KEY01_ORDER, 0xFF0000);
+      KeyColorSet(KEY01_ORDER, down_color);
       return 0;
     case JCPM_EVT_K01_UP:
+      KeyColorSet(KEY01_ORDER, up_color);
       return 0;
     case JCPM_EVT_K02_DOWN:
-      KeyColorSet(KEY02_ORDER, 0xFF0000);
+      KeyColorSet(KEY02_ORDER, down_color);
       return 0;
     case JCPM_EVT_K02_UP:
+      if(sub_state != 1) {
+        KeyColorSet(KEY02_ORDER, up_color);
+      }    
       return 0;
     case JCPM_EVT_K03_DOWN:
-      KeyColorSet(KEY03_ORDER, 0xFF0000);
+      KeyColorSet(KEY03_ORDER, down_color);
       return 0;
     case JCPM_EVT_K03_UP:
+      if (sub_state != 1) {
+        KeyColorSet(KEY03_ORDER, up_color);
+      }
       return 0;
     case JCPM_EVT_K12_DOWN:
-      KeyColorSet(KEY12_ORDER, 0xFF0000);
+      KeyColorSet(KEY12_ORDER, down_color);
       return 0;
     case JCPM_EVT_K12_UP:
+      KeyColorSet(KEY12_ORDER, up_color);
       return 0;
     case JCPM_EVT_K13_DOWN:
-      KeyColorSet(KEY13_ORDER, 0xFF0000);
+      KeyColorSet(KEY13_ORDER, down_color);
       return 0;
     case JCPM_EVT_K13_UP:
+      KeyColorSet(KEY13_ORDER, up_color);
       return 0;
 
     case JCPM_EVT_K22_DOWN:
-      KeyColorSet(KEY22_ORDER, 0xFF0000);
+      KeyColorSet(KEY22_ORDER, down_color);
       return 0;
     case JCPM_EVT_K22_UP:
+      KeyColorSet(KEY22_ORDER, up_color);
       return 0;
     case JCPM_EVT_K23_DOWN:
-      KeyColorSet(KEY23_ORDER, 0xFF0000);
+      KeyColorSet(KEY23_ORDER, down_color);
       return 0;
     case JCPM_EVT_K23_UP:
+      KeyColorSet(KEY23_ORDER, up_color);
       return 0;
 
     case JCPM_EVT_ENC_UP:
@@ -359,9 +464,16 @@ HSM_EVENT JCPM_StateTopHandler(HSM* This, HSM_EVENT event, void* param) {
     case JCPM_EVT_TICK:
       return 0;
 
+    case JCPM_EVT_PATTERN_PRESS:
+      // Handle the pattern press event
+      if (reinterpret_cast<int>(param) == 6) {
+        Keyboard.print("SanClemente23224");
+      }
+      Serial.print("PATTERN on key: ");
+      Serial.println(reinterpret_cast<int>(param));
+      return 0;
+
     default:
-      //Serial.print("Unhandled event in Top: ");
-      //Serial.println(event);
       return 0; 
   }
   return 0;
@@ -373,6 +485,7 @@ HSM_EVENT JCPM_StateMode2Handler(HSM* This, HSM_EVENT event, void* param) {
 
   switch (event) {
     case HSME_ENTRY:
+      reinterpret_cast<JCPM*>(This)->param1 = 2;
       KeyColorsSet(0, 0, 255);
       oled.clear();
       oled.println("     Mode 2");
@@ -388,8 +501,8 @@ HSM_EVENT JCPM_StateMode2Handler(HSM* This, HSM_EVENT event, void* param) {
       return 0;
 
     default:
-      Serial.print("Unhandled event in Mode2: ");
-      Serial.println(event);
+      //Serial.print("Unhandled event in Mode2: ");
+      //Serial.println(event);
       return event; // Pass the event up
   }
   return event;
@@ -423,8 +536,8 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
   static bool muted = false;
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
-  static unsigned long key_down_timer;
-  static int key_down_count;
+//  static unsigned long key_down_timer;
+//  static int key_down_count;
 
   switch (event) {
     case HSME_INIT:
@@ -432,6 +545,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
     case HSME_ENTRY:
       KeyColorsSet(0, 255, 0);
       showModeOneScreen();
+      reinterpret_cast<JCPM*>(This)->param1 = 1;
       break;
     case HSME_EXIT:
       break;
@@ -440,7 +554,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       clearMute(&muted, &muted_timer);
       break;
     case JCPM_EVT_K00_UP:
-      KeyColorSet(KEY00_ORDER, 0x00FF00);
+      //KeyColorSet(KEY00_ORDER, 0x00FF00);
       break; //return 0;
 
     case JCPM_EVT_K01_DOWN:
@@ -448,7 +562,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       clearMute(&muted, &muted_timer);      
       break;
     case JCPM_EVT_K01_UP:
-      KeyColorSet(KEY01_ORDER, 0x00FF00);
+      //KeyColorSet(KEY01_ORDER, 0x00FF00);
       break;
 
     // Mute toggle, disable Mute Timer
@@ -485,7 +599,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       }
       break; //return 0;
     case JCPM_EVT_K03_UP:
-      KeyColorSet(KEY03_ORDER, 0x00FF00);
+      //KeyColorSet(KEY03_ORDER, 0x00FF00);
       break;
 
     // Play/Pause
@@ -493,7 +607,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       Consumer.write(MEDIA_PLAY_PAUSE);
       break;
     case JCPM_EVT_K12_UP:
-      KeyColorSet(KEY12_ORDER, 0x00FF00);
+      //KeyColorSet(KEY12_ORDER, 0x00FF00);
       break;
 
     // Next
@@ -501,39 +615,18 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       Consumer.write(MEDIA_NEXT);
       break;
     case JCPM_EVT_K13_UP:
-      KeyColorSet(KEY13_ORDER, 0x00FF00);
+      //KeyColorSet(KEY13_ORDER, 0x00FF00);
       break;
 
     case JCPM_EVT_K22_DOWN:
-      key_down_timer = millis();
       break;
     case JCPM_EVT_K22_UP:
-      KeyColorSet(KEY22_ORDER, 0x00FF00);
-      if (millis() - key_down_timer > 2000 &&
-         millis() - key_down_timer < 3000)
-      {
-        //Keyboard.print("394361462693583308374033627891017182005269515746");
-      }
+      //KeyColorSet(KEY22_ORDER, 0x00FF00);
       break;
-
     case JCPM_EVT_K23_DOWN:
-      key_down_timer = millis();
-      if (millis() - key_down_timer < 100)
-      {
-        key_down_timer = millis();
-        if (++key_down_count > 3)
-        {
-          key_down_count = 0;
-          Serial.println("Blah");
-        }
-      }
-      else
-      {
-        key_down_count = 0;
-      }
       break;
     case JCPM_EVT_K23_UP:
-      KeyColorSet(KEY23_ORDER, 0x00FF00);
+      //KeyColorSet(KEY23_ORDER, 0x00FF00);
       break;
 
     // Encoder events
@@ -564,10 +657,10 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       }
       break;
 
-    default:
-      //Serial.print("Unhandled event Mode1: ");
-      //Serial.println(event);
-      return 0;
+    //default:
+    //  Serial.print("Unhandled event Mode1: ");
+    //  Serial.println(event);
+    //  return 0;
   }
   return event;
 }
@@ -650,7 +743,11 @@ void setup() {
 
 EventQueue queue;
 SwitchMonitor monitor(queue);
-
+// Define pattern: false = short, true = long (e.g., short, short, long, short)
+const bool long_press = true;
+const bool short_press = false;
+const bool press_pattern[] = {long_press, short_press, short_press, long_press};
+PatternPressDetector pattern_detector(queue, press_pattern, 4);
 void loop() {
   uint16_t keys = getKeys();
   int encoder = getEncoder();
@@ -666,6 +763,8 @@ void loop() {
 
   Event event;
   while (queue.retrieveEvent(event)) {
-    HSM_Run((HSM*)&basic, event.type, event.event_id);
+    pattern_detector.processEvent(event); // Check for pattern press
+
+    HSM_Run((HSM*)&basic, event.type, (void*)event.event_id);
   }
 }
