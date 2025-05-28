@@ -469,8 +469,9 @@ HSM_EVENT JCPM_StateTopHandler(HSM* This, HSM_EVENT event, void* param) {
       if (reinterpret_cast<int>(param) == 6) {
         Keyboard.print("SanClemente23224");
       }
-      Serial.print("PATTERN on key: ");
-      Serial.println(reinterpret_cast<int>(param));
+     
+      //Serial.print("PATTERN on key: ");
+      //Serial.println(reinterpret_cast<int>(param));
       return 0;
 
     default:
