@@ -600,7 +600,6 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       }
       break; //return 0;
     case JCPM_EVT_K03_UP:
-      //KeyColorSet(KEY03_ORDER, 0x00FF00);
       break;
 
     // Play/Pause
@@ -608,7 +607,6 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       Consumer.write(MEDIA_PLAY_PAUSE);
       break;
     case JCPM_EVT_K12_UP:
-      //KeyColorSet(KEY12_ORDER, 0x00FF00);
       break;
 
     // Next
@@ -616,18 +614,15 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       Consumer.write(MEDIA_NEXT);
       break;
     case JCPM_EVT_K13_UP:
-      //KeyColorSet(KEY13_ORDER, 0x00FF00);
       break;
 
     case JCPM_EVT_K22_DOWN:
       break;
     case JCPM_EVT_K22_UP:
-      //KeyColorSet(KEY22_ORDER, 0x00FF00);
       break;
     case JCPM_EVT_K23_DOWN:
       break;
     case JCPM_EVT_K23_UP:
-      //KeyColorSet(KEY23_ORDER, 0x00FF00);
       break;
 
     // Encoder events
