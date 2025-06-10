@@ -7,6 +7,9 @@
 #include <Adafruit_NeoPixel.h>
 #include "hsm.h"
 
+#define VERSION "0.5.3"  // Version of the project
+
+
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
 
@@ -491,6 +494,9 @@ HSM_EVENT JCPM_StateMode2Handler(HSM* This, HSM_EVENT event, void* param) {
       oled.clear();
       oled.println("     Mode 2");
       oled.println("Not implemented");
+      oled.println("");
+      oled.print("   v");
+      oled.println(VERSION);
       break;
     case HSME_EXIT:
       break;
@@ -529,7 +535,7 @@ void clearMute(bool *muted, bool *muted_timer)
   KeyColorSet(KEY02_ORDER, 0x00FF00);
   KeyColorSet(KEY03_ORDER, 0x00FF00);
 }
-const int TICKS_PER_SECOND = 7;
+const int TICKS_PER_SECOND = 10;
 
 
 HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
@@ -537,8 +543,6 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
   static bool muted = false;
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
-//  static unsigned long key_down_timer;
-//  static int key_down_count;
 
   switch (event) {
     case HSME_INIT:
@@ -555,7 +559,6 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       clearMute(&muted, &muted_timer);
       break;
     case JCPM_EVT_K00_UP:
-      //KeyColorSet(KEY00_ORDER, 0x00FF00);
       break; //return 0;
 
     case JCPM_EVT_K01_DOWN:
@@ -563,7 +566,6 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
       clearMute(&muted, &muted_timer);      
       break;
     case JCPM_EVT_K01_UP:
-      //KeyColorSet(KEY01_ORDER, 0x00FF00);
       break;
 
     // Mute toggle, disable Mute Timer
@@ -649,7 +651,7 @@ HSM_EVENT JCPM_StateMode1Handler(HSM* This, HSM_EVENT event, void* param) {
           clearMute(&muted, &muted_timer);
           Consumer.write(MEDIA_VOLUME_MUTE);          
           KeyColorSet(KEY03_ORDER, 0x00FF00);
-        }        
+        }
       }
       break;
 
