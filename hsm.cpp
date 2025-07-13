@@ -137,9 +137,9 @@ void HSM::Process() {
 
 void HSM::ProcessInQueue(hsm_state_t * st) {
     hsm_state_t initialState;
-    initialState.SetStateHandler(st->GetStateHandler());
-
-    if (st->EventQueueGetSize() > 0) {
+    
+    while (st->EventQueueGetSize() > 0) {
+        initialState.SetStateHandler(st->GetStateHandler());
         hsm_event_t* e = st->EventQueuePop();
         hsm_state_result_t currentResult;
         bool selfTrans = false;

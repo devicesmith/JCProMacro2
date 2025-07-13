@@ -4,7 +4,7 @@
 class PatternPressDetector {
 public:
     PatternPressDetector(hsm_state_t* state, const bool* pattern, uint8_t patternLen,
-                        uint32_t shortPressMaxMs = 400, uint32_t patternTimeoutMs = 2000)
+                        uint32_t shortPressMaxMs = 400, uint32_t patternTimeoutMs = 3000)
         : state(state), pattern(pattern), patternLen(patternLen),
           shortPressMaxMs(shortPressMaxMs), patternTimeoutMs(patternTimeoutMs)
     {
@@ -28,11 +28,17 @@ public:
         if (count == 0) {
             sequenceStart = now;
         } else if (now - sequenceStart > patternTimeoutMs) {
+            Serial.println("Timeout");
             reset();
             sequenceStart = now;
         }
 
         bool isLong = (duration > shortPressMaxMs);
+        if (isLong) {
+            Serial.println("LONG");
+        } else {
+            Serial.println("SHORT");
+        }
         if (pattern[count] == isLong) {
             count++;
             if (count == patternLen) {
@@ -47,6 +53,7 @@ public:
     void reset() {
         count = 0;
         sequenceStart = 0;
+        Serial.println("RESET");
     }
 
 private:

@@ -161,10 +161,30 @@ void muteMicrophoneToggle() {
 #endif
 }
 
+#define DEBUG_LOG_STATE_EVENT(e) { \
+    uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
+    bool print_signal = true; \
+    for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
+        if ((e)->signal == ignore_signal[i]) { \
+            print_signal = false; \
+            break; \
+        } \
+    } \
+    if (print_signal) { \
+        Serial.print(__func__); \
+        Serial.print("->"); \
+        Serial.println(jcpm_signal_names[e->signal]); \
+    } \
+} 
+
+
 hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   const uint32_t down_color = derivedStateData->down_color;
   const uint32_t up_color = derivedStateData->up_color;
+
+  HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
+  DEBUG_LOG_STATE_EVENT(e);
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
@@ -206,12 +226,16 @@ void showMode1Screen() {
 const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
 
+
 hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
   static bool mic_muted = false;
+
+  HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
+  DEBUG_LOG_STATE_EVENT(e);
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
@@ -327,6 +351,9 @@ void showMode2Screen() {
 hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
+  HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
+  DEBUG_LOG_STATE_EVENT(e);
+  
   switch (e->signal) {
     case HSM_SIG_ENTRY:
       derivedStateData->down_color = 0xFF0000; // Red when down
@@ -343,8 +370,8 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
       break;
 
     case SIG_PATTERN_PRESS:
-      Keyboard.print("Hello World!"); // Example action on pattern press
-      break;
+      Keyboard.print(pattern_match_text);
+      return HANDLE_STATE();
 
     case SIG_ENC_UP:
       return CHANGE_STATE(stateData, &JCPMMachine::Mode1State);
@@ -428,6 +455,7 @@ uint8_t keyBitPosToDownSignal(uint8_t bitPos) {
     case KEY22_BIT_POS: return SIG_K22_DOWN;
     case KEY23_BIT_POS: return SIG_K23_DOWN;
     case KEYENC_BIT_POS: return SIG_ENC_DOWN;
+    case KEYMOD_BIT_POS: return SIG_MODE_DOWN;
     default: return HSM_SIG_NONE; // Invalid bit position
   }
 }
@@ -443,6 +471,7 @@ uint8_t keyBitPosToUpSignal(uint8_t bitPos) {
     case KEY22_BIT_POS: return SIG_K22_UP;
     case KEY23_BIT_POS: return SIG_K23_UP;
     case KEYENC_BIT_POS: return SIG_ENC_UP;
+    case KEYMOD_BIT_POS: return SIG_MODE_UP;
     default: return HSM_SIG_NONE; // Invalid bit position
   }
 }

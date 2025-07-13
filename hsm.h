@@ -104,6 +104,27 @@ private:
 
 #ifdef HSM_DEBUG_LOGGING
 
+#if 01
+//#define HSM_DEBUG_PRINT(x) (Serial.print(__func__),Serial.print(":"), Serial.println(x))
+#define HSM_DEBUG_PRINT(x) (void(x))
+
+#define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
+    (void)(stateData); \
+    uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, 5}; \
+    bool print_signal = true; \
+    for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
+        if ((e)->signal == ignore_signal[i]) { \
+            print_signal = false; \
+            break; \
+        } \
+    } \
+    if (print_signal) { \
+        Serial.print(__func__); \
+        Serial.print("->"); \
+        Serial.println((e)->signal); \
+    } \
+} 
+#else
 extern int signal_filter[10];
 extern bool print_signal;
 
@@ -113,7 +134,7 @@ extern bool print_signal;
     if (print_signal) printf("%s(e:%d) -> ", __func__, (e)->signal); }
 
 #define HSM_DEBUG_PRINT(x) (print_signal ? printf("%s [%s]\n", __func__, (x)) : HSM_STATE_HANDLED)
-
+#endif
 #else
 #define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) (void(stateData), void(e))
 #define HSM_DEBUG_PRINT(x) (void(x))
