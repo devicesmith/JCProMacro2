@@ -1,40 +1,34 @@
-#pragma once  
+#pragma once
 #include <Arduino.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array)/sizeof(*(array)))
-
 #define STATE_DEPTH_MAX 10
-
 #define HSM_STATE_CAST(x) ((hsm_state_t*)(x))
 
-typedef enum
-{
-    HSM_STATE_IGNORED, 		// 0
-    HSM_STATE_HANDLED, 		// 1
-    HSM_STATE_CHANGED, 		// 2
+typedef enum {
+    HSM_STATE_IGNORED,      // 0
+    HSM_STATE_HANDLED,      // 1
+    HSM_STATE_CHANGED,      // 2
     HSM_STATE_DO_SUPERSTATE // 3
 } hsm_state_result_t;
 
-enum hsm_signal
-{
-   HSM_SIG_NONE = 0,
-   HSM_SIG_SILENT,        // 1  : Falls through to superstate handler
-   HSM_SIG_ENTRY,         // 2
-   HSM_SIG_EXIT,          // 3
-   HSM_SIG_INITIAL_TRANS, // 4
-   HSM_SIG_USER           // 5
+enum hsm_signal {
+    HSM_SIG_NONE = 0,
+    HSM_SIG_SILENT,        // 1  : Falls through to superstate handler
+    HSM_SIG_ENTRY,         // 2
+    HSM_SIG_EXIT,          // 3
+    HSM_SIG_INITIAL_TRANS, // 4
+    HSM_SIG_USER           // 5
 };
 
 typedef unsigned int hsm_signal_t;
 
 // Base structure for events in the HSM.
 // State machines will derive from this structure to create specific event types.
-struct hsm_event
-{
-   hsm_signal_t signal;
-
-   hsm_event(hsm_signal_t sig = HSM_SIG_NONE)
-     : signal(sig) {};
+struct hsm_event {
+    hsm_signal_t signal;
+    hsm_event(hsm_signal_t sig = HSM_SIG_NONE)
+        : signal(sig) {};
 };
 typedef hsm_event hsm_event_t;
 
@@ -45,73 +39,67 @@ typedef hsm_state_result_t (*state_handler_t)(hsm_state_t * state,
 
 const int MAX_EVENTS = 16;
 
-
-class EventQueue
-{
+class EventQueue {
 private:
-  hsm_event_t events[MAX_EVENTS];
-  uint8_t head = 0;
-  uint8_t tail = 0;
-  uint8_t size = 0;
+    hsm_event_t events[MAX_EVENTS];
+    uint8_t head = 0;
+    uint8_t tail = 0;
+    uint8_t size = 0;
 
 public:
-  EventQueue() = default;
-  ~EventQueue() = default;
+    EventQueue() = default;
+    ~EventQueue() = default;
 
-  bool registerEvent(hsm_signal_t signal) {
-    if (size == MAX_EVENTS) {
-      return false;
+    bool registerEvent(hsm_signal_t signal) {
+        if (size == MAX_EVENTS) {
+            return false;
+        }
+        events[tail] = hsm_event_t(signal);
+        tail = (tail + 1) % MAX_EVENTS;
+        size++;
+        return true;
     }
 
-    events[tail] = hsm_event_t(signal);
-    tail = (tail + 1) % MAX_EVENTS;
-    size++;
-    return true;
-  }
-
-  bool retrieveEvent(hsm_event_t** event) {
-    if (size == 0) {
-      *event = nullptr;
-      return false;
+    bool retrieveEvent(hsm_event_t** event) {
+        if (size == 0) {
+            *event = nullptr;
+            return false;
+        }
+        *event = &events[head];
+        head = (head + 1) % MAX_EVENTS;
+        size--;
+        return true;
     }
 
-    *event = &events[head];
+    inline bool isEmpty() const {
+        return size == 0;
+    }
 
-    head = (head + 1) % MAX_EVENTS;
-    size--;
-    return true;
-  }
+    inline bool isFull() const {
+        return size == MAX_EVENTS;
+    }
 
-  inline bool isEmpty() const {
-    return size == 0;
-  }
-
-  inline bool isFull() const {
-    return size == MAX_EVENTS;
-  }
-
-  inline int getSize() const {
-    return size;
-  }
+    inline int getSize() const {
+        return size;
+    }
 };
 
 #define HSM_EVENT_QUEUE_SIZE 8
 
-class hsm_state_t
-{
+class hsm_state_t {
 public:
-  virtual void EventQueuePush(hsm_signal_t signal);
-  hsm_event_t* EventQueuePop();
-  int EventQueueGetSize();
+    virtual void EventQueuePush(hsm_signal_t signal);
+    hsm_event_t* EventQueuePop();
+    int EventQueueGetSize();
 
-  state_handler_t GetStateHandler();
-  void SetStateHandler(state_handler_t st);
-  hsm_state_result_t StateHandler(hsm_event_t const * e);
-  ~hsm_state_t();
+    state_handler_t GetStateHandler();
+    void SetStateHandler(state_handler_t st);
+    hsm_state_result_t StateHandler(hsm_event_t const * e);
+    ~hsm_state_t();
 
 private:
-  state_handler_t stateHandler;
-  EventQueue Events;
+    state_handler_t stateHandler;
+    EventQueue Events;
 };
 
 #ifdef HSM_DEBUG_LOGGING
@@ -144,8 +132,7 @@ extern bool print_signal;
 
 #define STATE_SEARCH_PATH_DEPTH 10
 
-class HSM
-{
+class HSM {
 private:
     hsm_event_t silentEvent;
     hsm_event_t entryEvent;
@@ -162,23 +149,23 @@ public:
 
     static hsm_state_result_t rootState(hsm_state_t * state,
                                         hsm_event_t const * hsmEvent);
-    
+
     void EventQueuePush(hsm_signal_t signal);
     hsm_event_t* EventQueuePop();
     int EventQueueGetSize();
 
 private:
     int CheckForHandlerInPath(hsm_state_t * state,
-                            hsm_state_t pathToStateArray[],
-                            int pathToStateArrayDepth);
+                              hsm_state_t pathToStateArray[],
+                              int pathToStateArrayDepth);
     hsm_state_result_t callStateHandler(hsm_state_t * state,
-                                    hsm_event_t const * e,
-                                    bool log);
+                                        hsm_event_t const * e,
+                                        bool log);
     int DiscoverHierarchyToRootState(hsm_state_t * targetState,
-                                    hsm_state_t pathToTargetArray[],
-                                    int pathToTargetMaxDepth);
+                                     hsm_state_t pathToTargetArray[],
+                                     int pathToTargetMaxDepth);
     int DiscoverHierarchy(hsm_state_t * topState,
-                        hsm_state_t * bottomState,
-                        hsm_state_t pathToTargetArray[],
-                        int pathToTargetMaxDepth);
+                          hsm_state_t * bottomState,
+                          hsm_state_t pathToTargetArray[],
+                          int pathToTargetMaxDepth);
 };

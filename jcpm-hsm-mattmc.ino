@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
-
 #include <Encoder.h>
 #include <HID-Project.h>
 #include <Adafruit_NeoPixel.h>
@@ -18,6 +17,7 @@
 #define SCREEN_HEIGHT 64     // OLED display height, in pixels
 #define OLED_RESET 4         // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
 SSD1306AsciiWire oled;
 Encoder encoder(1, 0);
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
@@ -36,7 +36,7 @@ Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 #define KEY22 A3
 #define KEY23 14
 
-// Bit positons for each key, when reading the key state
+// Bit positions for each key, when reading the key state
 #define KEY00_BIT_POS 0
 #define KEY01_BIT_POS 1
 #define KEY02_BIT_POS 2
@@ -70,10 +70,8 @@ constexpr int KEY13_ORDER = 6;
 constexpr int KEY22_ORDER = 4;
 constexpr int KEY23_ORDER = 5;
 
-
-struct state_data_t : hsm_state_t
-{
-  uint32_t  down_color = 0xFF0000; // Default color for keys
+struct state_data_t : hsm_state_t {
+  uint32_t down_color = 0xFF0000; // Default color for keys
   uint32_t up_color   = 0x00FF00; // Default color for keys
 };
 
@@ -81,45 +79,42 @@ class JCPMMachine : public HSM {
 public:
   JCPMMachine();
 
-	static hsm_state_result_t TopState(hsm_state_t *stateData, hsm_event_t const *e);
-	static hsm_state_result_t Mode1State(hsm_state_t *stateData, hsm_event_t const *e);
-	static hsm_state_result_t Mode2State(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t TopState(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t Mode1State(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t Mode2State(hsm_state_t *stateData, hsm_event_t const *e);
 
- 	hsm_state_t * GetStateData();
+  hsm_state_t * GetStateData();
 
-  private:
+private:
   // Declare the state data structure for the HSM
   state_data_t stateData;
-
 };
 
 // Constructor for the JCPMMachine class
 JCPMMachine::JCPMMachine() {}
 
-//
-hsm_state_t * JCPMMachine::GetStateData()
-{
-	return &stateData;
+hsm_state_t * JCPMMachine::GetStateData() {
+  return &stateData;
 }
 
 JCPMMachine jcpmHSM;
+
 // Define your pattern
 const bool press_pattern[] = {true, false, false, true}; // long, short, short, long
 PatternPressDetector patternPressDetector(jcpmHSM.GetStateData(), press_pattern, 4);
 
-
 int signal_to_order(int signal) {
-    switch (signal) {
-        case SIG_K00_DOWN: case SIG_K00_UP: return KEY00_ORDER;
-        case SIG_K01_DOWN: case SIG_K01_UP: return KEY01_ORDER;
-        case SIG_K02_DOWN: case SIG_K02_UP: return KEY02_ORDER;
-        case SIG_K03_DOWN: case SIG_K03_UP: return KEY03_ORDER;
-        case SIG_K12_DOWN: case SIG_K12_UP: return KEY12_ORDER;
-        case SIG_K13_DOWN: case SIG_K13_UP: return KEY13_ORDER;
-        case SIG_K22_DOWN: case SIG_K22_UP: return KEY22_ORDER;
-        case SIG_K23_DOWN: case SIG_K23_UP: return KEY23_ORDER;
-        default: return -1;
-    }
+  switch (signal) {
+    case SIG_K00_DOWN: case SIG_K00_UP: return KEY00_ORDER;
+    case SIG_K01_DOWN: case SIG_K01_UP: return KEY01_ORDER;
+    case SIG_K02_DOWN: case SIG_K02_UP: return KEY02_ORDER;
+    case SIG_K03_DOWN: case SIG_K03_UP: return KEY03_ORDER;
+    case SIG_K12_DOWN: case SIG_K12_UP: return KEY12_ORDER;
+    case SIG_K13_DOWN: case SIG_K13_UP: return KEY13_ORDER;
+    case SIG_K22_DOWN: case SIG_K22_UP: return KEY22_ORDER;
+    case SIG_K23_DOWN: case SIG_K23_UP: return KEY23_ORDER;
+    default: return -1;
+  }
 }
 
 void KeyColorsSet(int r, int g, int b) {
@@ -130,7 +125,6 @@ void KeyColorsSet(int r, int g, int b) {
 }
 
 void KeyColorSet(int signal, uint32_t c) {
-
   int order = signal_to_order(signal);
   if (order < 0 || order > NUMPIXELS) {
     return;
@@ -138,95 +132,86 @@ void KeyColorSet(int signal, uint32_t c) {
   pixels.setPixelColor(order, c);
   pixels.show();  // Show results
 }
-void clearMute(bool *muted, bool *muted_timer)
-{
+
+void clearMute(bool *muted, bool *muted_timer) {
   *muted = false;
   *muted_timer = false;
   KeyColorSet(SIG_K02_DOWN, 0x00FF00);
-  KeyColorSet(SIG_K03_DOWN, 0x00FF00);
+  KeyColorSet(SIG_K13_DOWN, 0x00FF00);
+}
+
+void muteMicrophoneToggle() {
+  // MS Teams Mute on Ubuntu
+  Keyboard.press(KEY_LEFT_CTRL);
+  Keyboard.press(KEY_LEFT_SHIFT);
+  Keyboard.press('m');
+  delay(50);
+  Keyboard.releaseAll();
+
+#if 0
+  // Microphone Mute (0x04F6) - not universally supported
+  uint8_t report[3] = {0x01, 0xF6, 0x04};
+  HID().SendReport(1, report, 3);
+
+  uint8_t release[3] = {0x01, 0x00, 0x00};
+  HID().SendReport(1, release, 3);
+
+  //Consumer.write(HID_CONSUMER_MICROPHONE_CA); // Send microphone control (0x04)
+  //Consumer.releaseAll();
+#endif
 }
 
 hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   const uint32_t down_color = derivedStateData->down_color;
-  const uint32_t up_color = derivedStateData->up_color; 
-  
-  // if(e->signal != SIG_TICK && e->signal != HSM_SIG_SILENT) {
-  //   Serial.print("Top: ");
-  //   Serial.println(jcpm_signal_names[e->signal]);
-  // }
+  const uint32_t up_color = derivedStateData->up_color;
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
-      // Initialization code here
       return HANDLE_STATE();
-		case HSM_SIG_EXIT:
-		{
-			return HANDLE_STATE();
-		}
-		case HSM_SIG_INITIAL_TRANS:
-		{
-			return HANDLE_STATE();
-		}
+    case HSM_SIG_EXIT:
+      return HANDLE_STATE();
+    case HSM_SIG_INITIAL_TRANS:
+      return HANDLE_STATE();
     case SIG_TICK:
-      // Handle tick event
       return HANDLE_STATE();
 
-      case SIG_K00_DOWN:
-      case SIG_K01_DOWN:
-      case SIG_K02_DOWN:
-      case SIG_K03_DOWN:
-      case SIG_K12_DOWN:
-      case SIG_K13_DOWN:
-      case SIG_K22_DOWN:
-      case SIG_K23_DOWN:
-        KeyColorSet(e->signal, down_color);
-        return HANDLE_STATE();
-      case SIG_K00_UP:
-      case SIG_K01_UP:
-      case SIG_K02_UP:
-      case SIG_K03_UP:
-      case SIG_K12_UP:
-      case SIG_K13_UP:
-      case SIG_K22_UP:
-      case SIG_K23_UP:
-        KeyColorSet(e->signal, up_color);
-        return HANDLE_STATE();
+    case SIG_K00_DOWN: case SIG_K01_DOWN: case SIG_K02_DOWN: case SIG_K03_DOWN:
+    case SIG_K12_DOWN: case SIG_K13_DOWN: case SIG_K22_DOWN: case SIG_K23_DOWN:
+      KeyColorSet(e->signal, down_color);
+      return HANDLE_STATE();
+
+    case SIG_K00_UP: case SIG_K01_UP: case SIG_K02_UP: case SIG_K03_UP:
+    case SIG_K12_UP: case SIG_K13_UP: case SIG_K22_UP: case SIG_K23_UP:
+      KeyColorSet(e->signal, up_color);
+      return HANDLE_STATE();
 
     default:
-      // Pass to superstate or ignore
-     	return HANDLE_SUPER_STATE(stateData, &HSM::rootState);
-
+      return HANDLE_SUPER_STATE(stateData, &HSM::rootState);
   }
 }
 
-void showMode1Screen() 
-{
+void showMode1Screen() {
   oled.clear();
   oled.println("          | PW1 | KEY");
   oled.println("  Volume  |     | 23 ");
   oled.println("   ----   +-----+----");
-  oled.println(" |        | PAS | NXT");
-  oled.println(" v Next   | PLY |    ");
+  oled.println(" |        | PAS |Mute");
+  oled.println(" v Next   | PLY |TMR ");
   oled.println("-----+----+-----+----");
   oled.println(" Vol | Vol|Mute |Mute");
-  oled.println(" Dwn | Up |     |TMR ");
+  oled.println(" Dwn | Up |Vol  |Mic");
 }
 
-const int TICKS_PER_SECOND = 9;
+const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
-
 
 hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
-
-  // if(e->signal != SIG_TICK && e->signal != HSM_SIG_SILENT) {
-  //   Serial.print("Mode1: ");
-  //   Serial.println(jcpm_signal_names[e->signal]);
-  // }
+  static bool mic_muted = false;
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
@@ -236,14 +221,11 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       showMode1Screen(); // Display the mode 1 screen
       return HANDLE_STATE();
 
-		case HSM_SIG_EXIT:
-		{
-			return HANDLE_STATE();
-		}
-		case HSM_SIG_INITIAL_TRANS:
-		{
-			return HANDLE_STATE();
-		}
+    case HSM_SIG_EXIT:
+      return HANDLE_STATE();
+
+    case HSM_SIG_INITIAL_TRANS:
+      return HANDLE_STATE();
 
     case SIG_K00_DOWN:
       Consumer.write(MEDIA_VOLUME_DOWN);
@@ -255,46 +237,31 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       clearMute(&muted, &muted_timer);
       break;
 
-    //case SIG_K01_UP:
-	  //  return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
-
-    // Mute toggle, disable Mute Timer
     case SIG_K02_DOWN:
-      if (muted || muted_timer)
-      {
+      if (muted || muted_timer) {
         clearMute(&muted, &muted_timer);
-      }
-      else
-      {
+      } else {
         KeyColorSet(e->signal, 0xFF0000);
         muted = true;
         muted_timer = false;
       }
       Consumer.write(MEDIA_VOLUME_MUTE);
-			return HANDLE_STATE();
+      return HANDLE_STATE();
 
     case SIG_K02_UP:
       return HANDLE_STATE();
 
-    // Mute Timer
     case SIG_K03_DOWN:
-      if (muted_timer)
-      {
-        muted_timer_ticks += (TICKS_PER_SECOND * MUTE_DURATION_SECONDS);
+      if (mic_muted) {
+        mic_muted = false;
+        KeyColorSet(e->signal, 0x00FF00); // Green when unmuted
+      } else {
+        mic_muted = true;
+        KeyColorSet(e->signal, 0x7F7F00);
       }
-      else
-      {
-        if (!muted)
-        {
-          Consumer.write(MEDIA_VOLUME_MUTE);
-        }
-        else {
-          KeyColorSet(SIG_K02_DOWN, 0x00FF00);
-        }
-        muted_timer = true;
-        muted_timer_ticks = TICKS_PER_SECOND * MUTE_DURATION_SECONDS;
-      }
-      break;
+      muteMicrophoneToggle();
+      return HANDLE_STATE();
+
     case SIG_K03_UP:
       return HANDLE_STATE();
 
@@ -303,8 +270,21 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       break;
 
     case SIG_K13_DOWN:
-      Consumer.write(MEDIA_NEXT);
+      if (muted_timer) {
+        muted_timer_ticks += (TICKS_PER_SECOND * MUTE_DURATION_SECONDS);
+      } else {
+        if (!muted) {
+          Consumer.write(MEDIA_VOLUME_MUTE);
+        } else {
+          KeyColorSet(SIG_K02_DOWN, 0x00FF00);
+        }
+        muted_timer = true;
+        muted_timer_ticks = TICKS_PER_SECOND * MUTE_DURATION_SECONDS;
+      }
       break;
+
+    case SIG_K13_UP:
+      return HANDLE_STATE();
 
     case SIG_ENC_UP:
       return CHANGE_STATE(stateData, &JCPMMachine::Mode2State);
@@ -320,44 +300,35 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       break;
 
     case SIG_TICK:
-      if (muted_timer)
-      {
-        if (--muted_timer_ticks < 1)
-        {
+      if (muted_timer) {
+        if (--muted_timer_ticks < 1) {
           clearMute(&muted, &muted_timer);
-          Consumer.write(MEDIA_VOLUME_MUTE);          
+          Consumer.write(MEDIA_VOLUME_MUTE);
           KeyColorSet(SIG_K03_DOWN, 0x00FF00);
         }
       }
       break;
 
     default:
-	    return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
+      return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
   }
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
-
 }
 
-void showMode2Screen() 
-{
+void showMode2Screen() {
   oled.clear();
   oled.println("     Mode 2");
   oled.println("Not implemented");
   oled.println("");
   oled.print("   v");
-  oled.println(VERSION);}
+  oled.println(VERSION);
+}
 
 hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
-  // if(e->signal != SIG_TICK && e->signal != HSM_SIG_SILENT) {
-  //   Serial.print("Mode2: ");
-  //   Serial.println(jcpm_signal_names[e->signal]);
-  // }
-
   switch (e->signal) {
-    case HSM_SIG_ENTRY: 
-      // Set colors for keys in mode 2
+    case HSM_SIG_ENTRY:
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x0000FF;   // Blue when up
       KeyColorsSet(0, 0, 0xFF); // Set initial colors for keys
@@ -372,7 +343,7 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
       break;
 
     case SIG_PATTERN_PRESS:
-      Keyboard.print("Hello, World!"); // Example action on pattern press
+      Keyboard.print("Hello World!"); // Example action on pattern press
       break;
 
     case SIG_ENC_UP:
@@ -380,7 +351,6 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
   }
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
-
 
 uint16_t getKeys() {
   const int MAX = 1000;
@@ -409,7 +379,7 @@ uint16_t getKeys() {
     }
   }
   return bitvalues;
-};
+}
 
 int32_t getEncoder() {
   return encoder.read();
@@ -442,8 +412,10 @@ void initHW() {
   pixels.begin();
   pixels.clear();
   pixels.show();
-}
 
+  System.begin();
+  Consumer.begin();
+}
 
 uint8_t keyBitPosToDownSignal(uint8_t bitPos) {
   switch (bitPos) {
@@ -478,13 +450,13 @@ uint8_t keyBitPosToUpSignal(uint8_t bitPos) {
 // Here's a simple key change detector:
 void updateKeyEvents(uint16_t currentKeys) {
   static uint16_t prevKeys = 0;
-  
+
   // Check each key for changes
   for (int i = 0; i < 10; i++) {
     uint16_t mask = 1 << i;
     bool prevPressed = (prevKeys & mask) != 0;
     bool currPressed = (currentKeys & mask) != 0;
-    
+
     if (currPressed != prevPressed) {
       // Key state changed
       if (currPressed) {
@@ -496,13 +468,13 @@ void updateKeyEvents(uint16_t currentKeys) {
       } else {
         // Key released - add corresponding UP event
         uint8_t upSignal = keyBitPosToUpSignal(i);
-        if (upSignal != HSM_SIG_NONE) { 
+        if (upSignal != HSM_SIG_NONE) {
           jcpmHSM.GetStateData()->EventQueuePush(upSignal);
-        }        
+        }
       }
     }
   }
-  
+
   prevKeys = currentKeys;
 }
 
@@ -510,22 +482,22 @@ void updateEncoderEvents(int32_t currentEncoder) {
   static int32_t prevEncoder = 0;
   static int32_t accumulatedDelta = 0;
   const int32_t ENCODER_THRESHOLD = 4; // Adjust this value based on your encoder sensitivity
-  
+
   // Calculate the change in encoder position
   int32_t delta = currentEncoder - prevEncoder;
   accumulatedDelta += delta;
-  
+
   // Check if we've accumulated enough change to trigger an event
   while (accumulatedDelta >= ENCODER_THRESHOLD) {
     jcpmHSM.GetStateData()->EventQueuePush(SIG_VOL_UP);
     accumulatedDelta -= ENCODER_THRESHOLD;
   }
-  
+
   while (accumulatedDelta <= -ENCODER_THRESHOLD) {
     jcpmHSM.GetStateData()->EventQueuePush(SIG_VOL_DOWN);
     accumulatedDelta += ENCODER_THRESHOLD;
   }
-  
+
   prevEncoder = currentEncoder;
 }
 
@@ -540,26 +512,21 @@ void setup() {
   // Serial.println("JCPM HSM started");
   // Serial.print("Version: ");
   // Serial.println(VERSION);
-
 }
 
 void loop() {
-
-  uint16_t keys = getKeys();  
+  uint16_t keys = getKeys();
   int encoder = getEncoder();
-    
+
   updateKeyEvents(keys);
   updateEncoderEvents(encoder);
 
   static unsigned long tick = 0;
   unsigned long currentTick = millis();
-  if (currentTick - tick > 100)
-  {
+  if (currentTick - tick > 100) {
     tick = currentTick;
     jcpmHSM.GetStateData()->EventQueuePush(SIG_TICK);
   }
 
   jcpmHSM.Process();
-
-}
 
