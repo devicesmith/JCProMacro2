@@ -8,7 +8,7 @@
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
 
-#define VERSION "0.0.11"  // Version of the project
+#define VERSION "0.2.3"  // Version of the project
 
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
@@ -141,12 +141,28 @@ void clearMute(bool *muted, bool *muted_timer) {
 }
 
 void muteMicrophoneToggle() {
-  // MS Teams Mute on Ubuntu
+# if 01  // MS Teams Mute on Ubuntu
+  // Fist make sure Teams is in focus
+  Keyboard.write(KEY_LEFT_GUI);
+  //delay(500);
+  //Keyboard.press(KEY_LEFT_CTRL);
+  //Keyboard.press(KEY_BACKSPACE);
+  //delay(100);
+  //Keyboard.press(KEY_BACKSPACE);
+  //delay(100);
+  //Keyboard.releaseAll();
+  delay(500);
+  Keyboard.println("microsoft teams");
+     
+  // Wait for Teams to open
+  delay(750);
+  // Now send the mute command
   Keyboard.press(KEY_LEFT_CTRL);
   Keyboard.press(KEY_LEFT_SHIFT);
   Keyboard.press('m');
-  delay(50);
+  delay(100);
   Keyboard.releaseAll();
+#endif
 
 #if 0
   // Microphone Mute (0x04F6) - not universally supported
@@ -155,7 +171,9 @@ void muteMicrophoneToggle() {
 
   uint8_t release[3] = {0x01, 0x00, 0x00};
   HID().SendReport(1, release, 3);
+#endif
 
+#if 0
   //Consumer.write(HID_CONSUMER_MICROPHONE_CA); // Send microphone control (0x04)
   //Consumer.releaseAll();
 #endif
@@ -196,11 +214,11 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
     case SIG_TICK:
       return HANDLE_STATE();
 
+    // Toggle colors here, for all keys
     case SIG_K00_DOWN: case SIG_K01_DOWN: case SIG_K02_DOWN: case SIG_K03_DOWN:
     case SIG_K12_DOWN: case SIG_K13_DOWN: case SIG_K22_DOWN: case SIG_K23_DOWN:
       KeyColorSet(e->signal, down_color);
       return HANDLE_STATE();
-
     case SIG_K00_UP: case SIG_K01_UP: case SIG_K02_UP: case SIG_K03_UP:
     case SIG_K12_UP: case SIG_K13_UP: case SIG_K22_UP: case SIG_K23_UP:
       KeyColorSet(e->signal, up_color);
@@ -275,6 +293,7 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
     case SIG_K02_UP:
       return HANDLE_STATE();
 
+    // Mute microphone
     case SIG_K03_DOWN:
       if (mic_muted) {
         mic_muted = false;
