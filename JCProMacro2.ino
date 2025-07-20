@@ -8,7 +8,7 @@
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
 
-#define VERSION "0.2.3"  // Version of the project
+#define VERSION "1.3.0"  // Version of the project
 
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
@@ -80,8 +80,8 @@ public:
   JCPMMachine();
 
   static hsm_state_result_t TopState(hsm_state_t *stateData, hsm_event_t const *e);
-  static hsm_state_result_t Mode1State(hsm_state_t *stateData, hsm_event_t const *e);
-  static hsm_state_result_t Mode2State(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e);
 
   hsm_state_t * GetStateData();
 
@@ -126,6 +126,14 @@ void KeyColorsSet(int r, int g, int b) {
 
 void KeyColorSet(int signal, uint32_t c) {
   int order = signal_to_order(signal);
+  
+  Serial.print("KeyColorSet: signal=");
+  Serial.print(jcpm_signal_names[signal]);
+  Serial.print(", order=");
+  Serial.print(order);
+  Serial.print(", Color: ");
+  Serial.println(c, HEX);
+
   if (order < 0 || order > NUMPIXELS) {
     return;
   }
@@ -140,22 +148,23 @@ void clearMute(bool *muted, bool *muted_timer) {
   KeyColorSet(SIG_K13_DOWN, 0x00FF00);
 }
 
+// Switch to a specific application by name
+void linuxSwitchToApp(char *appName) {
+  // Switch to a specific application by name
+  Keyboard.write(KEY_LEFT_GUI);
+  delay(500);
+  Keyboard.print(appName);
+  delay(100);
+  Keyboard.press(KEY_RETURN);
+  delay(100);
+  Keyboard.releaseAll();
+}
+
 void muteMicrophoneToggle() {
 # if 01  // MS Teams Mute on Ubuntu
-  // Fist make sure Teams is in focus
-  Keyboard.write(KEY_LEFT_GUI);
-  //delay(500);
-  //Keyboard.press(KEY_LEFT_CTRL);
-  //Keyboard.press(KEY_BACKSPACE);
-  //delay(100);
-  //Keyboard.press(KEY_BACKSPACE);
-  //delay(100);
-  //Keyboard.releaseAll();
-  delay(500);
-  Keyboard.println("microsoft teams");
-     
+  linuxSwitchToApp("microsoft teams");     
   // Wait for Teams to open
-  delay(750);
+  delay(500);
   // Now send the mute command
   Keyboard.press(KEY_LEFT_CTRL);
   Keyboard.press(KEY_LEFT_SHIFT);
@@ -214,7 +223,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
     case SIG_TICK:
       return HANDLE_STATE();
 
-    // Toggle colors here, for all keys
+    // Toggle colors here, for all keys, if not handled by a specific state
     case SIG_K00_DOWN: case SIG_K01_DOWN: case SIG_K02_DOWN: case SIG_K03_DOWN:
     case SIG_K12_DOWN: case SIG_K13_DOWN: case SIG_K22_DOWN: case SIG_K23_DOWN:
       KeyColorSet(e->signal, down_color);
@@ -229,7 +238,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   }
 }
 
-void showMode1Screen() {
+void showModeUbuntuScreen() {
   oled.clear();
   oled.println("          | PW1 | KEY");
   oled.println("  Volume  |     | 23 ");
@@ -241,11 +250,11 @@ void showMode1Screen() {
   oled.println(" Dwn | Up |Vol  |Mic");
 }
 
+
 const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
 
-
-hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t const *e) {
+hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
   static bool muted_timer = false;
@@ -260,7 +269,7 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x00FF00;   // Green when up
       KeyColorsSet(0, 0xFF, 0); // Set initial colors for keys
-      showMode1Screen(); // Display the mode 1 screen
+      showModeUbuntuScreen(); // Display the mode 1 screen
       return HANDLE_STATE();
 
     case HSM_SIG_EXIT:
@@ -329,8 +338,19 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
     case SIG_K13_UP:
       return HANDLE_STATE();
 
+    case SIG_K22_DOWN:
+      patternPressDetector.onButtonDown(KEY22_ORDER);
+      break;
+    case SIG_K22_UP:
+      patternPressDetector.onButtonUp(KEY22_ORDER);
+      break;
+    case SIG_PATTERN_PRESS:
+      Keyboard.print(pattern_match_text);
+      return HANDLE_STATE();
+
+
     case SIG_ENC_UP:
-      return CHANGE_STATE(stateData, &JCPMMachine::Mode2State);
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
 
     case SIG_VOL_DOWN:
       Consumer.write(MEDIA_VOLUME_DOWN);
@@ -358,16 +378,36 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
 
-void showMode2Screen() {
+
+void showInfoScreen() {
   oled.clear();
-  oled.println("     Mode 2");
-  oled.println("Not implemented");
-  oled.println("");
-  oled.print("   v");
+  oled.println("   JC Pro Macro 2    ");
+  oled.println(" ------------------- ");
+  oled.print(" v");
   oled.println(VERSION);
+  oled.println("                     ");
+  oled.println(" By DeviceSmith      ");
+  oled.println("                     ");
+  oled.println("                     ");
+  oled.println("                     ");
 }
 
-hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t const *e) {
+
+
+void showModeUbuntuSwitchAppsScreen() {
+  oled.clear();
+  oled.println("          |     |Sett");
+  oled.println("  Volume  |     |ings");
+  oled.println("   ----   +-----+----");
+  oled.println(" |        | Out |Chro");
+  oled.println(" v Next   | look|me  ");
+  oled.println("-----+----+-----+----");
+  oled.println("Term | VS |Obsid|Team");
+  oled.println("inal |Code|ian  |    ");
+}
+
+
+hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
@@ -378,22 +418,37 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x0000FF;   // Blue when up
       KeyColorsSet(0, 0, 0xFF); // Set initial colors for keys
-      showMode2Screen(); // Display the mode 2 screen
+      showModeUbuntuSwitchAppsScreen(); // Display the mode 2 screen
       return HANDLE_STATE();
 
-    case SIG_K22_DOWN:
-      patternPressDetector.onButtonDown(KEY22_ORDER);
-      break;
+    case SIG_K00_UP:
+      linuxSwitchToApp("terminal");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+
+    case SIG_K01_UP:
+      linuxSwitchToApp("visual studio code");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+    case SIG_K02_UP:
+      linuxSwitchToApp("Obsidian");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+    case SIG_K03_UP:
+      linuxSwitchToApp("microsoft teams");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+    case SIG_K12_UP:
+      linuxSwitchToApp("outlook");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+    case SIG_K13_UP:
+      linuxSwitchToApp("chrome");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
     case SIG_K22_UP:
-      patternPressDetector.onButtonUp(KEY22_ORDER);
+      showInfoScreen();
       break;
-
-    case SIG_PATTERN_PRESS:
-      Keyboard.print(pattern_match_text);
-      return HANDLE_STATE();
+    case SIG_K23_UP:
+      linuxSwitchToApp("settings");
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
 
     case SIG_ENC_UP:
-      return CHANGE_STATE(stateData, &JCPMMachine::Mode1State);
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
   }
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
@@ -550,12 +605,12 @@ void updateEncoderEvents(int32_t currentEncoder) {
 }
 
 void setup() {
-  //Serial.begin(9600);
+  Serial.begin(9600);
   Keyboard.begin();
 
   initHW();
 
-  jcpmHSM.SetInitialState(JCPMMachine::Mode1State);
+  jcpmHSM.SetInitialState(JCPMMachine::ModeUbuntuState);
 
   // Serial.println("JCPM HSM started");
   // Serial.print("Version: ");
