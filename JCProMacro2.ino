@@ -2,13 +2,17 @@
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
 #include <Encoder.h>
-#include <HID-Project.h>
 #include <Adafruit_NeoPixel.h>
+#include <HID-Project.h>
 #include "hsm.h"
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
 
+<<<<<<< HEAD
 #define VERSION "1.3.0"  // Version of the project
+=======
+#define VERSION "1.0.0"  // Version of the project
+>>>>>>> update00
 
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
@@ -188,6 +192,21 @@ void muteMicrophoneToggle() {
 #endif
 }
 
+// Switch to a specific application by name
+// Using Keyboard to simulate GUI key press and app name typing
+void linuxSwitchToApp(const char *appName) {
+#if 01
+  // Switch to a specific application by name
+  Keyboard.write(KEY_LEFT_GUI);
+  delay(250);
+  Keyboard.println(appName);
+//  Keyboard.write(KEY_RETURN);
+  //delay(200);
+  //Keyboard.releaseAll();
+#endif
+}
+
+
 #define DEBUG_LOG_STATE_EVENT(e) { \
     uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
     bool print_signal = true; \
@@ -200,7 +219,8 @@ void muteMicrophoneToggle() {
     if (print_signal) { \
         Serial.print(__func__); \
         Serial.print("->"); \
-        Serial.println(jcpm_signal_names[e->signal]); \
+        Serial.print(jcpm_signal_names[e->signal]); \
+        Serial.print(" ("); Serial.print(e->signal); Serial.println(")"); \
     } \
 } 
 
@@ -254,6 +274,10 @@ void showModeUbuntuScreen() {
 const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> update00
 hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
@@ -302,7 +326,11 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case SIG_K02_UP:
       return HANDLE_STATE();
 
+<<<<<<< HEAD
     // Mute microphone
+=======
+    // Mute Microphone toggle
+>>>>>>> update00
     case SIG_K03_DOWN:
       if (mic_muted) {
         mic_muted = false;
@@ -338,6 +366,10 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case SIG_K13_UP:
       return HANDLE_STATE();
 
+<<<<<<< HEAD
+=======
+  
+>>>>>>> update00
     case SIG_K22_DOWN:
       patternPressDetector.onButtonDown(KEY22_ORDER);
       break;
@@ -378,7 +410,10 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> update00
 void showInfoScreen() {
   oled.clear();
   oled.println("   JC Pro Macro 2    ");
@@ -392,8 +427,11 @@ void showInfoScreen() {
   oled.println("                     ");
 }
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> update00
 void showModeUbuntuSwitchAppsScreen() {
   oled.clear();
   oled.println("          |     |Sett");
@@ -406,7 +444,10 @@ void showModeUbuntuSwitchAppsScreen() {
   oled.println("inal |Code|ian  |    ");
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> update00
 hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
@@ -487,35 +528,8 @@ int32_t getEncoder() {
 }
 
 void initHW() {
-  pinMode(LED_BUILTIN, OUTPUT);
+  
 
-  pinMode(KEYENC, INPUT_PULLUP);  //SW1 pushbutton (encoder button)
-  pinMode(KEY00, INPUT_PULLUP);   //SW2 pushbutton
-  pinMode(KEY01, INPUT_PULLUP);   //SW3 pushbutton
-  pinMode(KEY02, INPUT_PULLUP);   //SW4 pushbutton
-  pinMode(KEY03, INPUT_PULLUP);   //SW5 pushbutton
-  pinMode(KEY12, INPUT_PULLUP);   //SW6 pushbutton
-  pinMode(KEY13, INPUT_PULLUP);   //SW7 pushbutton
-  pinMode(KEY22, INPUT_PULLUP);   //SW8 pushbutton
-  pinMode(KEY23, INPUT_PULLUP);   //SW9 pushbutton
-  pinMode(KEYMOD, INPUT_PULLUP);  //SW10 pushbutton - acts as mode switch
-
-  randomSeed(analogRead(A9));
-
-  Wire.begin();
-  Wire.setClock(400000L);
-
-  oled.begin(&Adafruit128x64, SCREEN_ADDRESS, OLED_RESET);
-  oled.displayRemap(true); // rotate display 180
-  oled.setFont(System5x7);
-  oled.clear();
-
-  pixels.begin();
-  pixels.clear();
-  pixels.show();
-
-  System.begin();
-  Consumer.begin();
 }
 
 uint8_t keyBitPosToDownSignal(uint8_t bitPos) {
@@ -606,10 +620,41 @@ void updateEncoderEvents(int32_t currentEncoder) {
 
 void setup() {
   Serial.begin(9600);
+<<<<<<< HEAD
+=======
+pinMode(LED_BUILTIN, OUTPUT);
+
+  pinMode(KEYENC, INPUT_PULLUP);  //SW1 pushbutton (encoder button)
+  pinMode(KEY00, INPUT_PULLUP);   //SW2 pushbutton
+  pinMode(KEY01, INPUT_PULLUP);   //SW3 pushbutton
+  pinMode(KEY02, INPUT_PULLUP);   //SW4 pushbutton
+  pinMode(KEY03, INPUT_PULLUP);   //SW5 pushbutton
+  pinMode(KEY12, INPUT_PULLUP);   //SW6 pushbutton
+  pinMode(KEY13, INPUT_PULLUP);   //SW7 pushbutton
+  pinMode(KEY22, INPUT_PULLUP);   //SW8 pushbutton
+  pinMode(KEY23, INPUT_PULLUP);   //SW9 pushbutton
+  pinMode(KEYMOD, INPUT_PULLUP);  //SW10 pushbutton - acts as mode switch
+
+  Wire.begin();
+  Wire.setClock(400000L);
+>>>>>>> update00
   Keyboard.begin();
+  Consumer.begin();
 
-  initHW();
+  randomSeed(analogRead(A9));
 
+<<<<<<< HEAD
+=======
+  oled.begin(&Adafruit128x64, SCREEN_ADDRESS, OLED_RESET);
+  oled.displayRemap(true); // rotate display 180
+  oled.setFont(System5x7);
+  oled.clear();
+
+  pixels.begin();
+  pixels.clear();
+  pixels.show();
+
+>>>>>>> update00
   jcpmHSM.SetInitialState(JCPMMachine::ModeUbuntuState);
 
   // Serial.println("JCPM HSM started");
