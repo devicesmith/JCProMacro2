@@ -8,14 +8,18 @@
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
 
-<<<<<<< HEAD
-#define VERSION "1.3.0"  // Version of the project
-=======
-#define VERSION "1.0.0"  // Version of the project
->>>>>>> update00
+// Features to add:
+// --------------------------------------------------------
+// [ ] Repeat key
+// [ ] Fix switch to app on linux
+// [ ] Fix encoder wrapping on fast spin
+// [ ] Look into BOIS keyboard 
+// [ ] Restore LED colors (muted indicators), on return to ModeUbuntuState
 
-#define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
-#define PIN 5        // On Trinket or Gemma, suggest changing this to 1
+#define VERSION "1.4.1"  // Version of the project
+
+#define NUMPIXELS 8  // NeoPixel ring size, which is also the number of keys
+#define PIN 5        
 
 #define SCREEN_WIDTH 128     // OLED display width, in pixels
 #define SCREEN_HEIGHT 64     // OLED display height, in pixels
@@ -131,13 +135,6 @@ void KeyColorsSet(int r, int g, int b) {
 void KeyColorSet(int signal, uint32_t c) {
   int order = signal_to_order(signal);
   
-  Serial.print("KeyColorSet: signal=");
-  Serial.print(jcpm_signal_names[signal]);
-  Serial.print(", order=");
-  Serial.print(order);
-  Serial.print(", Color: ");
-  Serial.println(c, HEX);
-
   if (order < 0 || order > NUMPIXELS) {
     return;
   }
@@ -165,7 +162,7 @@ void linuxSwitchToApp(char *appName) {
 }
 
 void muteMicrophoneToggle() {
-# if 01  // MS Teams Mute on Ubuntu
+// MS Teams Mute on Ubuntu
   linuxSwitchToApp("microsoft teams");     
   // Wait for Teams to open
   delay(500);
@@ -175,37 +172,16 @@ void muteMicrophoneToggle() {
   Keyboard.press('m');
   delay(100);
   Keyboard.releaseAll();
-#endif
-
-#if 0
-  // Microphone Mute (0x04F6) - not universally supported
-  uint8_t report[3] = {0x01, 0xF6, 0x04};
-  HID().SendReport(1, report, 3);
-
-  uint8_t release[3] = {0x01, 0x00, 0x00};
-  HID().SendReport(1, release, 3);
-#endif
-
-#if 0
-  //Consumer.write(HID_CONSUMER_MICROPHONE_CA); // Send microphone control (0x04)
-  //Consumer.releaseAll();
-#endif
 }
 
 // Switch to a specific application by name
 // Using Keyboard to simulate GUI key press and app name typing
 void linuxSwitchToApp(const char *appName) {
-#if 01
   // Switch to a specific application by name
   Keyboard.write(KEY_LEFT_GUI);
   delay(250);
-  Keyboard.println(appName);
-//  Keyboard.write(KEY_RETURN);
-  //delay(200);
-  //Keyboard.releaseAll();
-#endif
+  //Keyboard.println(appName);
 }
-
 
 #define DEBUG_LOG_STATE_EVENT(e) { \
     uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
@@ -274,10 +250,6 @@ void showModeUbuntuScreen() {
 const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
 
-<<<<<<< HEAD
-=======
-
->>>>>>> update00
 hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
@@ -326,11 +298,7 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case SIG_K02_UP:
       return HANDLE_STATE();
 
-<<<<<<< HEAD
-    // Mute microphone
-=======
     // Mute Microphone toggle
->>>>>>> update00
     case SIG_K03_DOWN:
       if (mic_muted) {
         mic_muted = false;
@@ -366,10 +334,7 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case SIG_K13_UP:
       return HANDLE_STATE();
 
-<<<<<<< HEAD
-=======
   
->>>>>>> update00
     case SIG_K22_DOWN:
       patternPressDetector.onButtonDown(KEY22_ORDER);
       break;
@@ -410,10 +375,6 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> update00
 void showInfoScreen() {
   oled.clear();
   oled.println("   JC Pro Macro 2    ");
@@ -427,11 +388,6 @@ void showInfoScreen() {
   oled.println("                     ");
 }
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> update00
 void showModeUbuntuSwitchAppsScreen() {
   oled.clear();
   oled.println("          |     |Sett");
@@ -444,10 +400,6 @@ void showModeUbuntuSwitchAppsScreen() {
   oled.println("inal |Code|ian  |    ");
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> update00
 hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
@@ -465,7 +417,6 @@ hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData
     case SIG_K00_UP:
       linuxSwitchToApp("terminal");
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
-
     case SIG_K01_UP:
       linuxSwitchToApp("visual studio code");
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
@@ -525,11 +476,6 @@ uint16_t getKeys() {
 
 int32_t getEncoder() {
   return encoder.read();
-}
-
-void initHW() {
-  
-
 }
 
 uint8_t keyBitPosToDownSignal(uint8_t bitPos) {
@@ -620,9 +566,8 @@ void updateEncoderEvents(int32_t currentEncoder) {
 
 void setup() {
   Serial.begin(9600);
-<<<<<<< HEAD
-=======
-pinMode(LED_BUILTIN, OUTPUT);
+  
+  pinMode(LED_BUILTIN, OUTPUT);
 
   pinMode(KEYENC, INPUT_PULLUP);  //SW1 pushbutton (encoder button)
   pinMode(KEY00, INPUT_PULLUP);   //SW2 pushbutton
@@ -637,14 +582,11 @@ pinMode(LED_BUILTIN, OUTPUT);
 
   Wire.begin();
   Wire.setClock(400000L);
->>>>>>> update00
   Keyboard.begin();
   Consumer.begin();
 
   randomSeed(analogRead(A9));
 
-<<<<<<< HEAD
-=======
   oled.begin(&Adafruit128x64, SCREEN_ADDRESS, OLED_RESET);
   oled.displayRemap(true); // rotate display 180
   oled.setFont(System5x7);
@@ -654,7 +596,6 @@ pinMode(LED_BUILTIN, OUTPUT);
   pixels.clear();
   pixels.show();
 
->>>>>>> update00
   jcpmHSM.SetInitialState(JCPMMachine::ModeUbuntuState);
 
   // Serial.println("JCPM HSM started");
