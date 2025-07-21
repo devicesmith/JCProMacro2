@@ -8,7 +8,7 @@
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
 
-#define VERSION "0.0.11"  // Version of the project
+#define VERSION "0.2.0"  // Version of the project
 
 #define NUMPIXELS 8  // Popular NeoPixel ring size and the number of keys
 #define PIN 5        // On Trinket or Gemma, suggest changing this to 1
@@ -80,8 +80,8 @@ public:
   JCPMMachine();
 
   static hsm_state_result_t TopState(hsm_state_t *stateData, hsm_event_t const *e);
-  static hsm_state_result_t Mode1State(hsm_state_t *stateData, hsm_event_t const *e);
-  static hsm_state_result_t Mode2State(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e);
 
   hsm_state_t * GetStateData();
 
@@ -173,7 +173,8 @@ void muteMicrophoneToggle() {
     if (print_signal) { \
         Serial.print(__func__); \
         Serial.print("->"); \
-        Serial.println(jcpm_signal_names[e->signal]); \
+        Serial.print(jcpm_signal_names[e->signal]); \
+        Serial.print(" ("); Serial.print(e->signal); Serial.println(")"); \
     } \
 } 
 
@@ -211,7 +212,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   }
 }
 
-void showMode1Screen() {
+void showModeUbuntuScreen() {
   oled.clear();
   oled.println("          | PW1 | KEY");
   oled.println("  Volume  |     | 23 ");
@@ -227,7 +228,7 @@ const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
 
 
-hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t const *e) {
+hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
   static bool muted = false;
   static bool muted_timer = false;
@@ -242,7 +243,7 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x00FF00;   // Green when up
       KeyColorsSet(0, 0xFF, 0); // Set initial colors for keys
-      showMode1Screen(); // Display the mode 1 screen
+      showModeUbuntuScreen(); // Display the mode 1 screen
       return HANDLE_STATE();
 
     case HSM_SIG_EXIT:
@@ -311,7 +312,7 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
       return HANDLE_STATE();
 
     case SIG_ENC_UP:
-      return CHANGE_STATE(stateData, &JCPMMachine::Mode2State);
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
 
     case SIG_VOL_DOWN:
       Consumer.write(MEDIA_VOLUME_DOWN);
@@ -339,7 +340,7 @@ hsm_state_result_t JCPMMachine::Mode1State(hsm_state_t *stateData, hsm_event_t c
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
 
-void showMode2Screen() {
+void showModeUbuntuSwitchAppsScreen() {
   oled.clear();
   oled.println("     Mode 2");
   oled.println("Not implemented");
@@ -348,7 +349,7 @@ void showMode2Screen() {
   oled.println(VERSION);
 }
 
-hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t const *e) {
+hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
@@ -359,7 +360,7 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x0000FF;   // Blue when up
       KeyColorsSet(0, 0, 0xFF); // Set initial colors for keys
-      showMode2Screen(); // Display the mode 2 screen
+      showModeUbuntuSwitchAppsScreen(); // Display the mode 2 screen
       return HANDLE_STATE();
 
     case SIG_K22_DOWN:
@@ -374,7 +375,7 @@ hsm_state_result_t JCPMMachine::Mode2State(hsm_state_t *stateData, hsm_event_t c
       return HANDLE_STATE();
 
     case SIG_ENC_UP:
-      return CHANGE_STATE(stateData, &JCPMMachine::Mode1State);
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
   }
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
@@ -536,7 +537,7 @@ void setup() {
 
   initHW();
 
-  jcpmHSM.SetInitialState(JCPMMachine::Mode1State);
+  jcpmHSM.SetInitialState(JCPMMachine::ModeUbuntuState);
 
   // Serial.println("JCPM HSM started");
   // Serial.print("Version: ");
