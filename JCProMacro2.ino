@@ -3,7 +3,8 @@
 #include "SSD1306AsciiWire.h"
 #include <Encoder.h>
 #include <Adafruit_NeoPixel.h>
-#include <HID-Project.h>
+#include <Keyboard.h>
+#include <ConsumerKeyboard.h>
 #include "hsm.h"
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
@@ -11,12 +12,14 @@
 // Features to add:
 // --------------------------------------------------------
 // [ ] Repeat key
-// [ ] Fix switch to app on linux
+// [X] Fix switch to app on linux
+//     Seemed to be a bug with HID-Projuect. Switching to Keyboard and ConsumerKeyboard
+//     is working without the LED triggering and lock up bug.
 // [ ] Fix encoder wrapping on fast spin
 // [ ] Look into BOIS keyboard 
-// [ ] Restore LED colors (muted indicators), on return to ModeUbuntuState
+// [X] Restore LED colors (muted indicators), on return to ModeUbuntuState
 
-#define VERSION "1.4.1"  // Version of the project
+#define VERSION "1.4.10"  // Version of the project
 
 #define NUMPIXELS 8  // NeoPixel ring size, which is also the number of keys
 #define PIN 5        
@@ -111,6 +114,7 @@ JCPMMachine jcpmHSM;
 const bool press_pattern[] = {true, false, false, true}; // long, short, short, long
 PatternPressDetector patternPressDetector(jcpmHSM.GetStateData(), press_pattern, 4);
 
+
 int signal_to_order(int signal) {
   switch (signal) {
     case SIG_K00_DOWN: case SIG_K00_UP: return KEY00_ORDER;
@@ -149,30 +153,6 @@ void clearMute(bool *muted, bool *muted_timer) {
   KeyColorSet(SIG_K13_DOWN, 0x00FF00);
 }
 
-// Switch to a specific application by name
-void linuxSwitchToApp(char *appName) {
-  // Switch to a specific application by name
-  Keyboard.write(KEY_LEFT_GUI);
-  delay(500);
-  Keyboard.print(appName);
-  delay(100);
-  Keyboard.press(KEY_RETURN);
-  delay(100);
-  Keyboard.releaseAll();
-}
-
-void muteMicrophoneToggle() {
-// MS Teams Mute on Ubuntu
-  linuxSwitchToApp("microsoft teams");     
-  // Wait for Teams to open
-  delay(500);
-  // Now send the mute command
-  Keyboard.press(KEY_LEFT_CTRL);
-  Keyboard.press(KEY_LEFT_SHIFT);
-  Keyboard.press('m');
-  delay(100);
-  Keyboard.releaseAll();
-}
 
 // Switch to a specific application by name
 // Using Keyboard to simulate GUI key press and app name typing
@@ -180,7 +160,19 @@ void linuxSwitchToApp(const char *appName) {
   // Switch to a specific application by name
   Keyboard.write(KEY_LEFT_GUI);
   delay(250);
-  //Keyboard.println(appName);
+  Keyboard.println(appName);
+}
+
+void muteMicrophoneToggle() {
+// MS Teams Mute on Ubuntu
+  linuxSwitchToApp("microsoft teams");
+  delay(500);
+  // Now send the mute command to Teams
+  Keyboard.press(KEY_LEFT_CTRL);
+  Keyboard.press(KEY_LEFT_SHIFT);
+  Keyboard.press('m');
+  delay(200);
+  Keyboard.releaseAll();
 }
 
 #define DEBUG_LOG_STATE_EVENT(e) { \
@@ -266,6 +258,15 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       derivedStateData->up_color = 0x00FF00;   // Green when up
       KeyColorsSet(0, 0xFF, 0); // Set initial colors for keys
       showModeUbuntuScreen(); // Display the mode 1 screen
+      if (muted) {
+        KeyColorSet(SIG_K02_DOWN, 0xFF0000);
+      }
+      if (muted_timer) {
+       KeyColorSet(SIG_K13_DOWN, 0xFF0000);
+      }
+      if (mic_muted) {
+        KeyColorSet(SIG_K03_DOWN, 0x7F7F00);
+      }
       return HANDLE_STATE();
 
     case HSM_SIG_EXIT:
@@ -275,12 +276,14 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       return HANDLE_STATE();
 
     case SIG_K00_DOWN:
-      Consumer.write(MEDIA_VOLUME_DOWN);
+      ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
+      ConsumerKeyboard.release();
       clearMute(&muted, &muted_timer);
       break;
 
     case SIG_K01_DOWN:
-      Consumer.write(MEDIA_VOLUME_UP);
+      ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
+      ConsumerKeyboard.release();
       clearMute(&muted, &muted_timer);
       break;
 
@@ -292,7 +295,8 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
         muted = true;
         muted_timer = false;
       }
-      Consumer.write(MEDIA_VOLUME_MUTE);
+      ConsumerKeyboard.press(KEY_MUTE);
+      ConsumerKeyboard.release();
       return HANDLE_STATE();
 
     case SIG_K02_UP:
@@ -314,7 +318,8 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       return HANDLE_STATE();
 
     case SIG_K12_DOWN:
-      Consumer.write(MEDIA_PLAY_PAUSE);
+      ConsumerKeyboard.press(KEY_PLAY_PAUSE);
+      ConsumerKeyboard.release();
       break;
 
     case SIG_K13_DOWN:
@@ -322,7 +327,8 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
         muted_timer_ticks += (TICKS_PER_SECOND * MUTE_DURATION_SECONDS);
       } else {
         if (!muted) {
-          Consumer.write(MEDIA_VOLUME_MUTE);
+          ConsumerKeyboard.press(KEY_MUTE);
+          ConsumerKeyboard.release();
         } else {
           KeyColorSet(SIG_K02_DOWN, 0x00FF00);
         }
@@ -350,12 +356,14 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
 
     case SIG_VOL_DOWN:
-      Consumer.write(MEDIA_VOLUME_DOWN);
+      ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
+      ConsumerKeyboard.release();
       clearMute(&muted, &muted_timer);
       break;
 
     case SIG_VOL_UP:
-      Consumer.write(MEDIA_VOLUME_UP);
+      ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
+      ConsumerKeyboard.release();
       clearMute(&muted, &muted_timer);
       break;
 
@@ -363,7 +371,8 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       if (muted_timer) {
         if (--muted_timer_ticks < 1) {
           clearMute(&muted, &muted_timer);
-          Consumer.write(MEDIA_VOLUME_MUTE);
+          ConsumerKeyboard.press(KEY_MUTE);
+          ConsumerKeyboard.release();
           KeyColorSet(SIG_K03_DOWN, 0x00FF00);
         }
       }
@@ -549,6 +558,11 @@ void updateEncoderEvents(int32_t currentEncoder) {
   // Calculate the change in encoder position
   int32_t delta = currentEncoder - prevEncoder;
   accumulatedDelta += delta;
+  if (currentEncoder != prevEncoder) {
+    Serial.print("curr ("); Serial.print(currentEncoder); Serial.print(") ");
+    Serial.print("prev ("); Serial.print(prevEncoder); Serial.print(") ");
+    Serial.print("D:"); Serial.print(delta); Serial.print(" acc:"); Serial.println(accumulatedDelta);
+  }
 
   // Check if we've accumulated enough change to trigger an event
   while (accumulatedDelta >= ENCODER_THRESHOLD) {
@@ -580,10 +594,11 @@ void setup() {
   pinMode(KEY23, INPUT_PULLUP);   //SW9 pushbutton
   pinMode(KEYMOD, INPUT_PULLUP);  //SW10 pushbutton - acts as mode switch
 
+  //Consumer.begin(); // Consumer.begin() seems to need to be before Keyboard.begin()
+  Keyboard.begin();
+
   Wire.begin();
   Wire.setClock(400000L);
-  Keyboard.begin();
-  Consumer.begin();
 
   randomSeed(analogRead(A9));
 
