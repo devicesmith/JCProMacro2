@@ -19,7 +19,7 @@
 // [ ] Look into BOIS keyboard 
 // [X] Restore LED colors (muted indicators), on return to ModeUbuntuState
 
-#define VERSION "1.5.0"  // Version of the project
+#define VERSION "1.5.1"  // Version of the project
 
 #define NUMPIXELS 8  // NeoPixel ring size, which is also the number of keys
 #define PIN 5        
@@ -175,6 +175,9 @@ void muteMicrophoneToggle() {
   Keyboard.releaseAll();
 }
 
+#if 01
+#define DEBUG_LOG_STATE_EVENT(x) (void(x))
+#else
 #define DEBUG_LOG_STATE_EVENT(e) { \
     uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
     bool print_signal = true; \
@@ -191,7 +194,7 @@ void muteMicrophoneToggle() {
         Serial.print(" ("); Serial.print(e->signal); Serial.println(")"); \
     } \
 } 
-
+#endif
 
 hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
@@ -248,11 +251,9 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
     case SIG_TICK:
       if (k00_is_down && (++k00_wait > 3)) {
         derivedStateData->EventQueuePush(SIG_K00_DOWN);
-        Serial.println("k00");
       }
       if (k01_is_down && (++k01_wait > 3)) {
         derivedStateData->EventQueuePush(SIG_K01_DOWN);
-        Serial.println("k01");
       }
       return HANDLE_STATE();
 
@@ -596,12 +597,13 @@ void updateEncoderEvents(int32_t currentEncoder) {
   // Calculate the change in encoder position
   int32_t delta = currentEncoder - prevEncoder;
   accumulatedDelta += delta;
+#if 0
   if (currentEncoder != prevEncoder) {
     Serial.print("curr ("); Serial.print(currentEncoder); Serial.print(") ");
     Serial.print("prev ("); Serial.print(prevEncoder); Serial.print(") ");
     Serial.print("D:"); Serial.print(delta); Serial.print(" acc:"); Serial.println(accumulatedDelta);
   }
-
+#endif
   // Check if we've accumulated enough change to trigger an event
   while (accumulatedDelta >= ENCODER_THRESHOLD) {
     jcpmHSM.GetStateData()->EventQueuePush(SIG_VOL_UP);
@@ -617,7 +619,7 @@ void updateEncoderEvents(int32_t currentEncoder) {
 }
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
   
   pinMode(LED_BUILTIN, OUTPUT);
 

@@ -32,4 +32,4 @@ char const * jcpm_signal_names[] = {
   "SIG_PATTERN_PRESS"
 };
 
-const char* pattern_match_text = "Pattern matched!";
+const char* pattern_match_text = "Pattern Matched!";
