@@ -11,7 +11,7 @@
 
 // Features to add:
 // --------------------------------------------------------
-// [ ] Repeat key
+// [X] Repeat key
 // [X] Fix switch to app on linux
 //     Seemed to be a bug with HID-Projuect. Switching to Keyboard and ConsumerKeyboard
 //     is working without the LED triggering and lock up bug.
@@ -19,7 +19,7 @@
 // [ ] Look into BOIS keyboard 
 // [X] Restore LED colors (muted indicators), on return to ModeUbuntuState
 
-#define VERSION "1.4.10"  // Version of the project
+#define VERSION "1.5.0"  // Version of the project
 
 #define NUMPIXELS 8  // NeoPixel ring size, which is also the number of keys
 #define PIN 5        
@@ -166,12 +166,12 @@ void linuxSwitchToApp(const char *appName) {
 void muteMicrophoneToggle() {
 // MS Teams Mute on Ubuntu
   linuxSwitchToApp("microsoft teams");
-  delay(500);
+  delay(700);
   // Now send the mute command to Teams
   Keyboard.press(KEY_LEFT_CTRL);
   Keyboard.press(KEY_LEFT_SHIFT);
   Keyboard.press('m');
-  delay(200);
+  delay(300);
   Keyboard.releaseAll();
 }
 
@@ -198,6 +198,11 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   const uint32_t down_color = derivedStateData->down_color;
   const uint32_t up_color = derivedStateData->up_color;
 
+  static bool k00_is_down = false;
+  static bool k01_is_down = false;
+  static uint8_t k00_wait = 0;
+  static uint8_t k01_wait = 0;
+
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
   DEBUG_LOG_STATE_EVENT(e);
 
@@ -208,17 +213,47 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
       return HANDLE_STATE();
     case HSM_SIG_INITIAL_TRANS:
       return HANDLE_STATE();
-    case SIG_TICK:
-      return HANDLE_STATE();
 
     // Toggle colors here, for all keys, if not handled by a specific state
-    case SIG_K00_DOWN: case SIG_K01_DOWN: case SIG_K02_DOWN: case SIG_K03_DOWN:
+    case SIG_K02_DOWN: case SIG_K03_DOWN:
     case SIG_K12_DOWN: case SIG_K13_DOWN: case SIG_K22_DOWN: case SIG_K23_DOWN:
       KeyColorSet(e->signal, down_color);
       return HANDLE_STATE();
-    case SIG_K00_UP: case SIG_K01_UP: case SIG_K02_UP: case SIG_K03_UP:
+    case SIG_K02_UP: case SIG_K03_UP:
     case SIG_K12_UP: case SIG_K13_UP: case SIG_K22_UP: case SIG_K23_UP:
       KeyColorSet(e->signal, up_color);
+      return HANDLE_STATE();
+
+    // Handle repeat for Volume controls
+    case SIG_K00_DOWN:
+      k00_is_down = true;
+      KeyColorSet(e->signal, down_color);
+      return HANDLE_STATE();
+    case SIG_K01_DOWN:
+      k01_is_down = true;
+      KeyColorSet(e->signal, down_color);
+      return HANDLE_STATE();
+
+    case SIG_K00_UP:
+      k00_is_down = false;
+      k00_wait = 0;
+      KeyColorSet(e->signal, up_color);
+      return HANDLE_STATE();
+    case SIG_K01_UP:
+      k01_is_down = false;
+      k01_wait = 0;
+      KeyColorSet(e->signal, up_color);
+      return HANDLE_STATE();
+
+    case SIG_TICK:
+      if (k00_is_down && (++k00_wait > 3)) {
+        derivedStateData->EventQueuePush(SIG_K00_DOWN);
+        Serial.println("k00");
+      }
+      if (k01_is_down && (++k01_wait > 3)) {
+        derivedStateData->EventQueuePush(SIG_K01_DOWN);
+        Serial.println("k01");
+      }
       return HANDLE_STATE();
 
     default:
@@ -248,6 +283,7 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
   static bool mic_muted = false;
+  static bool k00_is_down = false;
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
   DEBUG_LOG_STATE_EVENT(e);
@@ -279,6 +315,9 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
       ConsumerKeyboard.release();
       clearMute(&muted, &muted_timer);
+      break;
+
+    case SIG_K00_UP:
       break;
 
     case SIG_K01_DOWN:
@@ -340,7 +379,6 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case SIG_K13_UP:
       return HANDLE_STATE();
 
-  
     case SIG_K22_DOWN:
       patternPressDetector.onButtonDown(KEY22_ORDER);
       break;
