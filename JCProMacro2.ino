@@ -16,10 +16,13 @@
 //     Seemed to be a bug with HID-Projuect. Switching to Keyboard and ConsumerKeyboard
 //     is working without the LED triggering and lock up bug.
 // [ ] Fix encoder wrapping on fast spin
-// [ ] Look into BOIS keyboard 
+//     I'm assuming this is an issue due to the the way the encoder is wired (interrupt lines?), 
+//     or perhaps an issue with the driver. The encoder is just returning bad numbers.
+// [ ] Look into BOIS keyboard so it can be used during the boot screen to (potentially)
+//     automate all the log in stuff I have to do.
 // [X] Restore LED colors (muted indicators), on return to ModeUbuntuState
 
-#define VERSION "1.5.1"  // Version of the project
+#define VERSION "1.6.2"  // Version of the project
 
 #define NUMPIXELS 8  // NeoPixel ring size, which is also the number of keys
 #define PIN 5        
@@ -93,6 +96,7 @@ public:
   static hsm_state_result_t TopState(hsm_state_t *stateData, hsm_event_t const *e);
   static hsm_state_result_t ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e);
   static hsm_state_result_t ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e);
+  static hsm_state_result_t TypingHelpState(hsm_state_t *stateData, hsm_event_t const *e);
 
   hsm_state_t * GetStateData();
 
@@ -249,6 +253,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
       return HANDLE_STATE();
 
     case SIG_TICK:
+      // Handle repeat for Volume controls, based on key press duration
       if (k00_is_down && (++k00_wait > 3)) {
         derivedStateData->EventQueuePush(SIG_K00_DOWN);
       }
@@ -264,11 +269,11 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
 
 void showModeUbuntuScreen() {
   oled.clear();
-  oled.println("          | PW1 | KEY");
-  oled.println("  Volume  |     | 23 ");
-  oled.println("   ----   +-----+----");
-  oled.println(" |        | PAS |Mute");
-  oled.println(" v Next   | PLY |TMR ");
+  oled.println("  Volume  | PW1 | KEY");
+  oled.println("  --+--   |     | 23 ");
+  oled.println("    |     +-----+----");
+  oled.println("    V     | PAS |Mute");
+  oled.println("   Next   | PLY |TMR ");
   oled.println("-----+----+-----+----");
   oled.println(" Vol | Vol|Mute |Mute");
   oled.println(" Dwn | Up |Vol  |Mic");
@@ -284,7 +289,6 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
   static bool muted_timer = false;
   static int muted_timer_ticks = 0;
   static bool mic_muted = false;
-  static bool k00_is_down = false;
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
   DEBUG_LOG_STATE_EVENT(e);
@@ -488,11 +492,57 @@ hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
 
     case SIG_ENC_UP:
+      return CHANGE_STATE(stateData, &JCPMMachine::TypingHelpState);
+  }
+  return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
+}
+
+
+void doSequence(void) {
+  Keyboard.println("Hello, world!");
+}
+
+void TypingHelpStateScreen() {
+  oled.clear();
+  oled.println("          |     |    ");
+  oled.println("  Volume  |     |    ");
+  oled.println("   ----   +-----+----");
+  oled.println(" |        |     |    ");
+  oled.println(" v Next   |     |    ");
+  oled.println("-----+----+-----+----");
+  oled.println("     |    |     |    ");
+  oled.println("     |    |     |    ");
+}
+
+hsm_state_result_t JCPMMachine::TypingHelpState(hsm_state_t *stateData, hsm_event_t const *e) {
+  state_data_t* derivedStateData = static_cast<state_data_t*>(stateData); 
+  HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
+  DEBUG_LOG_STATE_EVENT(e);
+
+  switch (e->signal) {
+    case HSM_SIG_ENTRY:
+      derivedStateData->down_color = 0xFF0000; // Red when down
+      derivedStateData->up_color = 0xFFA500;   // Orange when up
+      KeyColorsSet(0xFF, 0xA5, 0x00); 
+      TypingHelpStateScreen();
+      return HANDLE_STATE();
+
+    case HSM_SIG_EXIT:
+      return HANDLE_STATE();
+   case HSM_SIG_INITIAL_TRANS:
+      return HANDLE_STATE();
+
+  case SIG_K00_DOWN:
+    doSequence();
+    return HANDLE_STATE();
+
+  case SIG_ENC_UP:
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
   }
   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
 }
 
+  
 uint16_t getKeys() {
   const int MAX = 1000;
   uint16_t bitvalues = 0;

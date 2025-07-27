@@ -1,0 +1,6 @@
+{
+  "sketch": "JCProMacro2.ino",
+  "port": "/dev/cu.usbmodem*",
+  "board": "arduino:avr:leonardo",
+  "output": "build"
+}

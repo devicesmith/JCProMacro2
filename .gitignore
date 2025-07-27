@@ -1,0 +1,57 @@
+# Build artifacts
+build/
+*.hex
+*.elf
+*.o
+*.a
+*.map
+*.lst
+*.sym
+*.lss
+*.eep
+*.srec
+
+# Arduino IDE files
+.arduino/
+*.tmp
+
+# VS Code user-specific settings
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+
+# Keep VS Code workspace configurations but ignore user-specific ones
+# Uncomment the lines below if you want to exclude all VS Code settings
+# .vscode/
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Dependencies (if using libraries not managed by Arduino IDE)
+node_modules/
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# IDE specific files
+.vs/
+*.suo
+*.user
+*.vcxproj.user
+
+# Backup files
+*.bak
+*.backup
