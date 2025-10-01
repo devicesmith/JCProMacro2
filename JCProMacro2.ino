@@ -401,21 +401,12 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
 
 
 uint16_t getKeys() {
-  const int MAX = 1000;
   uint16_t bitValues = 0;
-  uint16_t prevBits = -1;
-  int32_t integrator = MAX;
 
-  while (--integrator > 0) {
-    for (int i = 0; i <= 12; i++) {
-      bitValues |= (!digitalRead(i) << i);
-    }
-
-    if (prevBits != bitValues) {
-      integrator = MAX;
-      prevBits = bitValues;
-    }
+  for (int i = 0; i <= 12; i++) {
+    bitValues |= (!digitalRead(i) << i);
   }
+
   return bitValues;
 }
 
