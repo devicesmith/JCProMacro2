@@ -110,6 +110,14 @@ private:
 
 #define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
     (void)(stateData); \
+    if (true) { \
+        Serial.print(__func__); \
+        Serial.print("->"); \
+        Serial.println((e)->signal); \
+    } \
+} 
+#else
+
     uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, 5}; \
     bool print_signal = true; \
     for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
@@ -118,13 +126,11 @@ private:
             break; \
         } \
     } \
-    if (print_signal) { \
-        Serial.print(__func__); \
-        Serial.print("->"); \
-        Serial.println((e)->signal); \
-    } \
-} 
-#else
+
+
+
+
+
 extern int signal_filter[10];
 extern bool print_signal;
 

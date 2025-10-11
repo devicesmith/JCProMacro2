@@ -33,8 +33,8 @@ char const * jcpm_signal_names[] = {
   "SIG_K12_UP",
   "SIG_ENC_DOWN",
   "SIG_ENC_UP",
-  "SIG_VOL_DOWN",
-  "SIG_VOL_UP",
+  "SIG_VOL_DEC",
+  "SIG_VOL_INC",
   "SIG_PATTERN_PRESS"
 };
 

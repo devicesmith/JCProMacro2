@@ -5,6 +5,8 @@
 #include <RotaryEncoder.h>
 #include <Wire.h>
 
+#include "Keyboard.h"
+
 #include "hsm.h"
 #include "jcpm-hsm-mattmc-signals.h"
 #include "PatternPressDetector.h"
@@ -22,9 +24,31 @@ void checkPosition() {  encoder.tick(); } // just call tick() to check the state
 // our encoder position state
 int encoder_pos = 0;
 
+#define USE_DEBUG_OUTPUT 1
+#if USE_DEBUG_OUTPUT
+#define DEBUG_LOG_STATE_EVENT(e) { \
+    bool print_signal = true; \
+    uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
+    for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
+        if ((e)->signal == ignore_signal[i]) { \
+            print_signal = false; \
+            break; \
+        } \
+    } \
+    if (print_signal) { \
+        Serial.print(__func__); \
+        Serial.print(":"); \
+        Serial.print(__LINE__); \
+        Serial.print("->"); \
+        Serial.print(jcpm_signal_names[e->signal]); \
+        Serial.print(" ("); Serial.print(e->signal); Serial.println(")"); \
+    } \
+} 
+#else
 
+#define DEBUG_LOG_STATE_EVENT(x) (void(x))
 
-
+#endif
 
 int signal_to_order(int signal) {
   switch (signal) {
@@ -104,7 +128,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   // static uint8_t k2_wait = 0;
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
-  //DEBUG_LOG_STATE_EVENT(e);
+  DEBUG_LOG_STATE_EVENT(e);
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
@@ -163,18 +187,19 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   }
 }
 
-// void showModeUbuntuScreen() {
-//   oled.clear();
-//   oled.println("          | PW1 | KEY");
-//   oled.println("  Volume  |     | 23 ");
-//   oled.println("   ----   +-----+----");
-//   oled.println(" |        | PAS |Mute");
-//   oled.println(" v Next   | PLY |TMR ");
-//   oled.println("-----+----+-----+----");
-//   oled.println(" Vol | Vol|Mute |Mute");
-//   oled.println(" Dwn | Up |Vol  |Mic");
-// }
-
+void showModeUbuntuScreen() {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.println("          | PW1 | KEY");
+  display.println("  Volume  |     | 23 ");
+  display.println("   ----   +-----+----");
+  display.println(" |        | PAS |Mute");
+  display.println(" v Next   | PLY |TMR ");
+  display.println("-----+----+-----+----");
+  display.println(" Vol | Vol|Mute |Mute");
+  display.println(" Dwn | Up |Vol  |Mic");
+  display.display();
+}
 
 const int TICKS_PER_SECOND = 7;
 const int MUTE_DURATION_SECONDS = 30;
@@ -188,14 +213,14 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
   // static bool k00_is_down = false;
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
-  //DEBUG_LOG_STATE_EVENT(e);
+  DEBUG_LOG_STATE_EVENT(e);
 
   switch (e->signal) {
     case HSM_SIG_ENTRY:
       derivedStateData->down_color = 0xFF0000; // Red when down
       derivedStateData->up_color = 0x00FF00;   // Green when up
       KeyColorsSet(0, 0xFF, 0); // Set initial colors for keys
-      //showModeUbuntuScreen(); // Display the mode 1 screen
+      showModeUbuntuScreen(); // Display the mode 1 screen
       // if (muted) {
       //   KeyColorSet(SIG_K02_DOWN, 0xFF0000);
       // }
@@ -292,20 +317,20 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     //   return HANDLE_STATE();
 
 
-    // case SIG_ENC_UP:
-    //   return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
+    case SIG_ENC_UP:
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
 
-    // case SIG_VOL_DOWN:
-    //   ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
-    //   ConsumerKeyboard.release();
-    //   clearMute(&muted, &muted_timer);
-    //   break;
+    case SIG_VOL_DOWN:
+      ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
+      ConsumerKeyboard.release();
+      //clearMute(&muted, &muted_timer);
+      break;
 
-    // case SIG_VOL_UP:
-    //   ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
-    //   ConsumerKeyboard.release();
-    //   clearMute(&muted, &muted_timer);
-    //   break;
+    case SIG_VOL_UP:
+      ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
+      ConsumerKeyboard.release();
+      //clearMute(&muted, &muted_timer);
+      break;
 
     // case SIG_TICK:
     //   if (muted_timer) {
@@ -337,31 +362,33 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
 //   oled.println("                     ");
 // }
 
-// void showModeUbuntuSwitchAppsScreen() {
-//   oled.clear();
-//   oled.println("          |     |Sett");
-//   oled.println("  Volume  |     |ings");
-//   oled.println("   ----   +-----+----");
-//   oled.println(" |        | Out |Chro");
-//   oled.println(" v Next   | look|me  ");
-//   oled.println("-----+----+-----+----");
-//   oled.println("Term | VS |Obsid|Team");
-//   oled.println("inal |Code|ian  |    ");
-// }
+void showModeUbuntuSwitchAppsScreen() {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.println("          |     |Sett");
+  display.println("  Volume  |     |ings");
+  display.println("   ----   +-----+----");
+  display.println(" |        | Out |Chro");
+  display.println(" v Next   | look|me  ");
+  display.println("-----+----+-----+----");
+  display.println("Term | VS |Obsid|Team");
+  display.println("inal |Code|ian  |    ");
+  display.display();
+}
 
-// hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
-//   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
+hsm_state_result_t JCPMMachine::ModeUbuntuSwitchAppsState(hsm_state_t *stateData, hsm_event_t const *e) {
+  state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
 
-//   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
-//   DEBUG_LOG_STATE_EVENT(e);
+  HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
+  DEBUG_LOG_STATE_EVENT(e);
   
-//   switch (e->signal) {
-//     case HSM_SIG_ENTRY:
-//       derivedStateData->down_color = 0xFF0000; // Red when down
-//       derivedStateData->up_color = 0x0000FF;   // Blue when up
-//       KeyColorsSet(0, 0, 0xFF); // Set initial colors for keys
-//       showModeUbuntuSwitchAppsScreen(); // Display the mode 2 screen
-//       return HANDLE_STATE();
+  switch (e->signal) {
+    case HSM_SIG_ENTRY:
+      derivedStateData->down_color = 0xFF0000; // Red when down
+      derivedStateData->up_color = 0x0000FF;   // Blue when up
+      KeyColorsSet(0, 0, 0xFF); // Set initial colors for keys
+      showModeUbuntuSwitchAppsScreen(); // Display the mode 2 screen
+      return HANDLE_STATE();
 
 //     case SIG_K00_UP:
 //       linuxSwitchToApp("terminal");
@@ -388,11 +415,11 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
 //       linuxSwitchToApp("settings");
 //       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
 
-//     case SIG_ENC_UP:
-//       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
-//   }
-//   return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
-// }
+    case SIG_ENC_UP:
+      return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuState);
+  }
+  return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
+}
 
 
 
@@ -489,14 +516,14 @@ void updateKeyEvents(uint16_t currentKeys) {
         uint8_t downSignal = keyBitPosToDownSignal(i);
         if (downSignal != HSM_SIG_NONE) {
           jcpmHSM.GetStateData()->EventQueuePush(downSignal);
-          Serial.print("i:");Serial.print(i);Serial.print(" ");Serial.println(jcpm_signal_names[downSignal]);
+          //Serial.print("i:");Serial.print(i);Serial.print(" ");Serial.println(jcpm_signal_names[downSignal]);
         }
       } else {
         // Key released - add corresponding UP event
         uint8_t upSignal = keyBitPosToUpSignal(i);
         if (upSignal != HSM_SIG_NONE) {
           jcpmHSM.GetStateData()->EventQueuePush(upSignal);
-          Serial.print("i:");Serial.print(i);Serial.print(" ");Serial.println(jcpm_signal_names[upSignal]);
+          //Serial.print("i:");Serial.print(i);Serial.print(" ");Serial.println(jcpm_signal_names[upSignal]);
         }
       }
     }
@@ -537,7 +564,7 @@ void updateEncoderEvents(int32_t currentEncoder) {
 
 void setup() {
   Serial.begin(115200);
-  //while (!Serial) { delay(10); }     // wait till serial port is opened
+  while (!Serial) { delay(10); }     // wait till serial port is opened
   delay(100);  // RP2040 delay is not a bad idea
 
   Serial.println("Adafruit Macropad with RP2040");
@@ -580,15 +607,18 @@ void setup() {
   delay(100);
   tone(PIN_SPEAKER, 1319, 200); // tone2 - E6
   delay(200);
+
+  jcpmHSM.SetInitialState(JCPMMachine::ModeUbuntuState);
+
 }
 
 uint8_t j = 0;
 //bool i2c_found[128] = {false};
 
 void loop() {
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.println("Macropad");
+//  display.clearDisplay();
+//  display.setCursor(0,0);
+//  display.println("Macropad");
   
   encoder.tick();          // check the encoder
   int newPos = encoder.getPosition();
@@ -599,41 +629,41 @@ void loop() {
     Serial.println((int)(encoder.getDirection()));
     encoder_pos = newPos;
   }
-  display.setCursor(0, 8);
-  display.print("Rotary encoder: ");
-  display.print(encoder_pos);
+//  display.setCursor(0, 8);
+//  display.print("Rotary encoder: ");
+//  display.print(encoder_pos);
   
   // check encoder press
-  display.setCursor(0, 24);
+//  display.setCursor(0, 24);
   if (!digitalRead(PIN_SWITCH)) {
 //    Serial.println("Encoder button");
-    display.print("Encoder pressed ");
+//    display.print("Encoder pressed ");
     pixels.setBrightness(255);     // bright!
   } else {
     pixels.setBrightness(80);
   }
 
-  for(int i=0; i< pixels.numPixels(); i++) {
-    pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
-  }
+//  for(int i=0; i< pixels.numPixels(); i++) {
+//    pixels.setPixelColor(i, Wheel(((i * 256 / pixels.numPixels()) + j) & 255));
+//  }
   
-  for (int i=1; i<=12; i++) {
-    if (!digitalRead(i)) { // switch pressed!
-//      Serial.print("Switch "); Serial.println(i);
-      pixels.setPixelColor(i-1, 0xFFFFFF);  // make white
-      // move the text into a 3x4 grid
-      display.setCursor(((i-1) % 3)*48, 32 + ((i-1)/3)*8);
-      display.print("KEY");
-      display.print(i);
-    }
-  }
+//  for (int i=1; i<=12; i++) {
+//    if (!digitalRead(i)) { // switch pressed!
+////      Serial.print("Switch "); Serial.println(i);
+//      pixels.setPixelColor(i-1, 0xFFFFFF);  // make white
+//      // move the text into a 3x4 grid
+////      display.setCursor(((i-1) % 3)*48, 32 + ((i-1)/3)*8);
+////      display.print("KEY");
+////      display.print(i);
+//    }
+//  }
 
   // show neopixels, incredment swirl
   pixels.show();
-  j++;
+//  j++;
 
   // display oled
-  display.display();
+  //display.display();
 
 //  Serial.print("Keys:"); Serial.print(getKeys(), HEX);
 //  Serial.print(" Enc:"); Serial.println(getEncoder(),HEX);
@@ -650,9 +680,8 @@ void loop() {
     tick = currentTick;
     jcpmHSM.GetStateData()->EventQueuePush(SIG_TICK);
   }
-#if 0
+
   jcpmHSM.Process();
-#endif
 
 }
 

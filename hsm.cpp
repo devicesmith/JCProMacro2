@@ -129,6 +129,8 @@ void HSM::SetInitialState(state_handler_t initialState) {
         destinationState.SetStateHandler(pathToTargetState[0].GetStateHandler());
         GetStateData()->SetStateHandler(pathToTargetState[0].GetStateHandler());
     } while (callStateHandler(GetStateData(), &initEvent, true) == HSM_STATE_CHANGED);
+
+
 }
 
 void HSM::Process() {
@@ -137,7 +139,12 @@ void HSM::Process() {
 
 void HSM::ProcessInQueue(hsm_state_t * st) {
     hsm_state_t initialState;
-    
+
+    if (st->GetStateHandler() == NULL) {
+        Serial.println("SetInitialState() NOT called!");
+        return;
+    }
+
     while (st->EventQueueGetSize() > 0) {
         initialState.SetStateHandler(st->GetStateHandler());
         hsm_event_t* e = st->EventQueuePop();
@@ -157,7 +164,6 @@ void HSM::ProcessInQueue(hsm_state_t * st) {
             selfTrans = (st->GetStateHandler() == lastState.GetStateHandler());
             lastState.SetStateHandler(st->GetStateHandler());
         } while (currentResult == HSM_STATE_DO_SUPERSTATE);
-
         backToSelfTop = ((st->GetStateHandler() == initialState.GetStateHandler()) &&
                          (st->GetStateHandler() != stateHandlingEvent.GetStateHandler()));
 
