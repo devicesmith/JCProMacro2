@@ -1,5 +1,5 @@
 #pragma once
-#include "jcpm-hsm-mattmc-signals.h"
+//#include "hsm-signals.h"
 
 class PatternPressDetector {
 public:

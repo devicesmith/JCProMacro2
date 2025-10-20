@@ -1,8 +1,8 @@
 #pragma once
-#include "hsm.h"
+#include "hsm-signals.h"
 
 // Define all the signal events for the HSM
-enum jcpm_signal : uint8_t
+enum macropad_signal : uint8_t
 {
   // Events to all
   SIG_TICK = HSM_SIG_USER,		// 5  : system clock tick
@@ -36,8 +36,10 @@ enum jcpm_signal : uint8_t
   SIG_VOL_INC,
   SIG_PATTERN_PRESS,
   SIG_LAST
-} jcpm_signal_t;
+};
 
-extern char const * jcpm_signal_names[];
+typedef macropad_signal macropad_signal_t;
+
+extern char const * macropad_signal_names[];
 
 extern char const * pattern_match_text;

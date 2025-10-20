@@ -1,12 +1,11 @@
-//#include "jcpm-hsm-mattmc-signals.h"
 
-char const * jcpm_signal_names[] = {
+char const * macropad_signal_names[] = {
   "HSM_SIG_NONE",
   "HSM_SIG_SILENT",        // 1  : Falls through to superstate handler
   "HSM_SIG_ENTRY",         // 2
   "HSM_SIG_EXIT",          // 3
   "HSM_SIG_INITIAL_TRANS", // 4
-  "SIG_TICK",
+  "SIG_TICK",              // HSM_SIG_USER
   "SIG_K1_DOWN",
   "SIG_K1_UP",
   "SIG_K2_DOWN",

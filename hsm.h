@@ -1,5 +1,10 @@
 #pragma once
 #include <Arduino.h>
+#include "hsm-signals.h"
+#include "macropad-signals.h"
+
+// Forward declaration for signal names array
+extern char const * macropad_signal_names[];
 
 #define ARRAY_LENGTH(array) (sizeof(array)/sizeof(*(array)))
 #define STATE_DEPTH_MAX 10
@@ -12,16 +17,7 @@ typedef enum {
     HSM_STATE_DO_SUPERSTATE // 3
 } hsm_state_result_t;
 
-enum hsm_signal {
-    HSM_SIG_NONE = 0,
-    HSM_SIG_SILENT,        // 1  : Falls through to superstate handler
-    HSM_SIG_ENTRY,         // 2
-    HSM_SIG_EXIT,          // 3
-    HSM_SIG_INITIAL_TRANS, // 4
-    HSM_SIG_USER           // 5
-};
-
-typedef unsigned int hsm_signal_t;
+typedef uint8_t hsm_signal_t;
 
 // Base structure for events in the HSM.
 // State machines will derive from this structure to create specific event types.
@@ -102,59 +98,67 @@ private:
     EventQueue Events;
 };
 
+#define HSM_DEBUG_LOGGING
+#define HSM_DEBUG_EXTENDED
+//#define HSME_DEBUG_LOG_STATE
+
 #ifdef HSM_DEBUG_LOGGING
-
-#if 01
-//#define HSM_DEBUG_PRINT(x) (Serial.print(__func__),Serial.print(":"), Serial.println(x))
-#define HSM_DEBUG_PRINT(x) (void(x))
-
-#define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
-    (void)(stateData); \
-    if (true) { \
-        Serial.print(__func__); \
-        Serial.print("->"); \
-        Serial.println((e)->signal); \
-    } \
-} 
+    #define HSM_DEBUG_LOG(x) (Serial.print(__func__),Serial.print(":"), Serial.print(__LINE__),Serial.print(":"),Serial.println(x))
 #else
-
-    uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, 5}; \
-    bool print_signal = true; \
-    for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
-        if ((e)->signal == ignore_signal[i]) { \
-            print_signal = false; \
-            break; \
-        } \
-    } \
-
-
-
-
-
-extern int signal_filter[10];
-extern bool print_signal;
-
-#define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
-    int *f = std::find(std::begin(signal_filter), std::end(signal_filter), e->signal); \
-    print_signal = (f == std::end(signal_filter)); \
-    if (print_signal) printf("%s(e:%d) -> ", __func__, (e)->signal); }
-
-#define HSM_DEBUG_PRINT(x) (print_signal ? printf("%s [%s]\n", __func__, (x)) : HSM_STATE_HANDLED)
+    #define HSM_DEBUG_LOG(x) (void(x))
 #endif
+
+#ifdef HSM_DEBUG_LOG_STATE
+    #define HSM_DEBUG_LOG_STATE(x) (Serial.print(__func__),Serial.print(":"), Serial.print(__LINE__),Serial.print(":"),Serial.println(x))
 #else
-#define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) (void(stateData), void(e))
-#define HSM_DEBUG_PRINT(x) (void(x))
+    #define HSM_DEBUG_LOG_STATE(x) (void(x))
+#endif
+
+
+//#define HSM_DEBUG_LOGGGING_EXTENDED
+#ifdef HSM_DEBUG_LOGGGING_EXTENDED
+    #define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
+        (void)(stateData); \
+        if (true) { \
+            Serial.print(__func__); \
+            Serial.print("->"); \
+            if ((e)->signal < SIG_LAST) { \
+                Serial.println(macropad_signal_names[(e)->signal]); \
+            } else { \
+                Serial.print("UNKNOWN_SIGNAL("); \
+                Serial.print((e)->signal); \
+                Serial.println(")"); \
+            } \
+        } \
+    } 
+#else
+    #define HSM_DEBUG_LOG_STATE_EVENT(stateData, e) { \
+        (void)(stateData); \
+        uint8_t ignore_signal[] = {HSM_SIG_SILENT, HSM_SIG_INITIAL_TRANS, HSM_STATE_IGNORED, SIG_TICK}; \
+        bool print_signal = true; \
+        for (unsigned int i = 0; i < sizeof(ignore_signal)/sizeof(ignore_signal[0]); ++i) { \
+            if ((e)->signal == ignore_signal[i]) { \
+                print_signal = false; \
+                break; \
+            } \
+        } \
+        if (print_signal) { \
+            Serial.print(__func__); \
+            Serial.print("->"); \
+            Serial.println(macropad_signal_names[(e)->signal]); \
+        } \
+    } 
 #endif
 
 #define CHANGE_STATE(current_state_data, new_state) (current_state_data->SetStateHandler((new_state)), \
-                    HSM_DEBUG_PRINT("CHANGE_STATE"), HSM_STATE_CHANGED)
+                    HSM_DEBUG_LOG("CHANGE_STATE"), HSM_STATE_CHANGED)
 
-#define HANDLE_STATE() (HSM_DEBUG_PRINT("HANDLE_STATE"), HSM_STATE_HANDLED)
+#define HANDLE_STATE() (HSM_DEBUG_LOG_STATE("HANDLE_STATE"), HSM_STATE_HANDLED)
 
-#define IGNORE_STATE(x) (void(x), HSM_DEBUG_PRINT("IGNORE_STATE"), HSM_STATE_IGNORED)
+#define IGNORE_STATE(x) (void(x), HSM_DEBUG_LOG_STATE("IGNORE_STATE"), HSM_STATE_IGNORED)
 
 #define HANDLE_SUPER_STATE(state_data, super_state) (state_data->SetStateHandler((super_state)),\
-                                                     HSM_DEBUG_PRINT("HANDLE_SUPER_STATE"), \
+                                                     HSM_DEBUG_LOG_STATE("HANDLE_SUPER_STATE"), \
                                                      HSM_STATE_DO_SUPERSTATE)
 
 #define STATE_SEARCH_PATH_DEPTH 10
