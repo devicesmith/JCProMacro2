@@ -1,4 +1,5 @@
 #include <Keyboard.h>
+
 #include <Adafruit_SH110X.h>
 #include <Adafruit_NeoPixel.h>
 #include <RotaryEncoder.h>
@@ -7,6 +8,15 @@
 #include "hsm.h"
 #include "macropad-signals.h"
 #include "PatternPressDetector.h"
+
+#define BTN_DEC_VOL_KEYDOWN SIG_K10_DOWN
+#define BTN_DEC_VOL_KEYUP SIG_K10_UP
+#define BTN_INC_VOL_KEYDOWN SIG_K11_DOWN
+#define BTN_INC_VOL_KEYUP SIG_K11_UP
+#define BTN_MUTE_KEYDOWN SIG_K12_DOWN
+#define BTN_MUTE_KEYUP SIG_K12_UP
+#define BTN_MUTE_TIMER_KEYDOWN SIG_K9_DOWN
+#define BTN_MUTE_TIMER_KEYUP SIG_K9_UP
 
 
 // Create the neopixel strip with the built in definitions NUM_NEOPIXEL and PIN_NEOPIXEL
@@ -82,6 +92,19 @@ void KeyColorSet(int signal, uint32_t c) {
   pixels.show();  // Show results
 }
 
+void clearMuteFlag(bool *muted, bool *muted_timer) {
+  *muted = false;
+  *muted_timer = false;
+  KeyColorSet(BTN_MUTE_KEYDOWN, 0x00FF00);
+  KeyColorSet(BTN_MUTE_TIMER_KEYDOWN, 0x00FF00);
+}
+
+void sendMuteCommand() {
+  Keyboard.consumerPress(KEY_MUTE);
+  delay(100);
+  Keyboard.consumerRelease();
+}
+
 struct state_data_t : hsm_state_t {
   uint32_t down_color = 0xFF0000; // Default color for keys
   uint32_t up_color   = 0x00FF00; // Default color for keys
@@ -117,11 +140,6 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
   const uint32_t down_color = derivedStateData->down_color;
   const uint32_t up_color = derivedStateData->up_color;
 
-  // static bool k1_is_down = false;
-  // static bool k2_is_down = false;
-  // static uint8_t k1_wait = 0;
-  // static uint8_t k2_wait = 0;
-
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
   DEBUG_LOG_STATE_EVENT(e);
 
@@ -147,34 +165,7 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
       KeyColorSet(e->signal, up_color);
       return HANDLE_STATE();
 
-    // // Handle repeat for Volume controls
-    // case SIG_K00_DOWN:
-    //   k00_is_down = true;
-    //   KeyColorSet(e->signal, down_color);
-    //   return HANDLE_STATE();
-    // case SIG_K01_DOWN:
-    //   k01_is_down = true;
-    //   KeyColorSet(e->signal, down_color);
-    //   return HANDLE_STATE();
-
-    // case SIG_K00_UP:
-    //   k00_is_down = false;
-    //   k00_wait = 0;
-    //   KeyColorSet(e->signal, up_color);
-    //   return HANDLE_STATE();
-    // case SIG_K01_UP:
-    //   k01_is_down = false;
-    //   k01_wait = 0;
-    //   KeyColorSet(e->signal, up_color);
-    //   return HANDLE_STATE();
-
     case SIG_TICK:
-      // if (k00_is_down && (++k00_wait > 3)) {
-      //   derivedStateData->EventQueuePush(SIG_K00_DOWN);
-      // }
-      // if (k01_is_down && (++k01_wait > 3)) {
-      //   derivedStateData->EventQueuePush(SIG_K01_DOWN);
-      // }
       return HANDLE_STATE();
 
     default:
@@ -185,27 +176,30 @@ hsm_state_result_t JCPMMachine::TopState(hsm_state_t *stateData, hsm_event_t con
 void showModeUbuntuScreen() {
   display.clearDisplay();
   display.setCursor(0,0);
-  display.println("          | PW1 | KEY");
-  display.println("  Volume  |     | 23 ");
-  display.println("   ----   +-----+----");
-  display.println(" |        | PAS |Mute");
-  display.println(" v Next   | PLY |TMR ");
-  display.println("-----+----+-----+----");
-  display.println(" Vol | Vol|Mute |Mute");
-  display.println(" Dwn | Up |Vol  |Mic");
+  display.println("               | VOL ");
+  display.println("               v SCRN");
+  display.println("------+-------+------");
+  display.println("      |       |      ");
+  display.println("------+-------+------");
+  display.println("      |       |MT TMR ");
+  display.println("------+-------+-------");
+  display.println("VOL v | VOL ^ | MUTE  ");
   display.display();
 }
 
-const int TICKS_PER_SECOND = 7;
+const int TICKS_PER_SECOND = 10;
 const int MUTE_DURATION_SECONDS = 30;
 
 hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_event_t const *e) {
   state_data_t* derivedStateData = static_cast<state_data_t*>(stateData);
-  // static bool muted = false;
-  // static bool muted_timer = false;
-  // static int muted_timer_ticks = 0;
-  // static bool mic_muted = false;
-  // static bool k00_is_down = false;
+  static bool muted = false;
+  static bool muted_timer = false;
+  static int muted_timer_ticks = 0;
+  static bool mic_muted = false;
+  static bool vol_dec_btn_is_down = false;
+  static int vol_dec_wait = 0;
+  static bool vol_inc_btn_is_down = false;
+  static int vol_inc_wait = 0;
 
   HSM_DEBUG_LOG_STATE_EVENT(stateData, e);
   DEBUG_LOG_STATE_EVENT(e);
@@ -216,12 +210,15 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
       derivedStateData->up_color = 0x00FF00;   // Green when up
       KeyColorsSet(0, 0xFF, 0); // Set initial colors for keys
       showModeUbuntuScreen(); // Display the mode 1 screen
-      // if (muted) {
-      //   KeyColorSet(SIG_K02_DOWN, 0xFF0000);
-      // }
-      // if (muted_timer) {
-      //  KeyColorSet(SIG_K13_DOWN, 0xFF0000);
-      // }
+
+      // Indicate muted active on return to this keyboard "level"
+      if (muted) {
+         KeyColorSet(BTN_MUTE_KEYDOWN, 0xFF0000);
+      }
+      // Indicate mute timer active on return to this keyboard "level"
+      if (muted_timer) {
+        KeyColorSet(BTN_MUTE_TIMER_KEYDOWN, 0xFF0000);
+      }
       // if (mic_muted) {
       //   KeyColorSet(SIG_K03_DOWN, 0x7F7F00);
       // }
@@ -233,35 +230,42 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     case HSM_SIG_INITIAL_TRANS:
       return HANDLE_STATE();
 
-    // case SIG_K00_DOWN:
-      // ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
-      // ConsumerKeyboard.release();
-      // clearMute(&muted, &muted_timer);
-      // break;
+    case BTN_DEC_VOL_KEYDOWN:
+      Keyboard.consumerPress(KEY_VOLUME_DECREMENT);
+      Keyboard.consumerRelease();
+      clearMuteFlag(&muted, &muted_timer);
+      vol_dec_btn_is_down = true;
+      break;
 
-    // case SIG_K00_UP:
-      // break;
+    case BTN_DEC_VOL_KEYUP:
+      vol_dec_btn_is_down = false;
+      vol_dec_wait = 0;
+      break; // Let default handler handle it (and call superstate)
 
-    // case SIG_K01_DOWN:
-      // ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
-      // ConsumerKeyboard.release();
-      // clearMute(&muted, &muted_timer);
-      // break;
+    case BTN_INC_VOL_KEYDOWN:
+      Keyboard.consumerPress(KEY_VOLUME_INCREMENT);
+      Keyboard.consumerRelease();
+      clearMuteFlag(&muted, &muted_timer);
+      vol_inc_btn_is_down = true;
+      break;
 
-    // case SIG_K02_DOWN:
-      // if (muted || muted_timer) {
-      //   clearMute(&muted, &muted_timer);
-      // } else {
-      //   KeyColorSet(e->signal, 0xFF0000);
-      //   muted = true;
-      //   muted_timer = false;
-      // }
-      // ConsumerKeyboard.press(KEY_MUTE);
-      // ConsumerKeyboard.release();
-      // return HANDLE_STATE();
+    case BTN_INC_VOL_KEYUP:
+      vol_inc_btn_is_down = false;
+      vol_inc_wait = 0;
+      break; // Let default handler handle it (and call superstate)
 
-    // case SIG_K02_UP:
-    //   return HANDLE_STATE();
+    case BTN_MUTE_KEYDOWN:
+      if (muted || muted_timer) {
+        clearMuteFlag(&muted, &muted_timer);
+      } else {
+        KeyColorSet(e->signal, 0xFF0000);
+        muted = true;
+      }
+      sendMuteCommand();
+      return HANDLE_STATE(); // don't call superstate
+
+    case BTN_MUTE_KEYUP:
+      return HANDLE_STATE();
 
     // // Mute Microphone toggle
     // case SIG_K03_DOWN:
@@ -283,23 +287,23 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     //   ConsumerKeyboard.release();
     //   break;
 
-    // case SIG_K13_DOWN:
-    //   if (muted_timer) {
-    //     muted_timer_ticks += (TICKS_PER_SECOND * MUTE_DURATION_SECONDS);
-    //   } else {
-    //     if (!muted) {
-    //       ConsumerKeyboard.press(KEY_MUTE);
-    //       ConsumerKeyboard.release();
-    //     } else {
-    //       KeyColorSet(SIG_K02_DOWN, 0x00FF00);
-    //     }
-    //     muted_timer = true;
-    //     muted_timer_ticks = TICKS_PER_SECOND * MUTE_DURATION_SECONDS;
-    //   }
-    //   break;
+    case BTN_MUTE_TIMER_KEYDOWN:
+      if (muted_timer) {
+        muted_timer_ticks += (TICKS_PER_SECOND * MUTE_DURATION_SECONDS);
+      } else {
+        if (!muted) {
+          sendMuteCommand();
+          muted = true;
+        } else {
+          KeyColorSet(BTN_MUTE_TIMER_KEYDOWN, 0x00FF00);
+        }
+        muted_timer = true;
+        muted_timer_ticks = TICKS_PER_SECOND * MUTE_DURATION_SECONDS;
+      }
+      break;
 
-    // case SIG_K13_UP:
-    //   return HANDLE_STATE();
+    case BTN_MUTE_TIMER_KEYUP:
+      return HANDLE_STATE();
 
     // case SIG_K22_DOWN:
     //   patternPressDetector.onButtonDown(KEY22_ORDER);
@@ -311,44 +315,37 @@ hsm_state_result_t JCPMMachine::ModeUbuntuState(hsm_state_t *stateData, hsm_even
     //   Keyboard.print(pattern_match_text);
     //   return HANDLE_STATE();
 
-
     case SIG_ENC_UP:
       return CHANGE_STATE(stateData, &JCPMMachine::ModeUbuntuSwitchAppsState);
 
     case SIG_VOL_DEC:
-      //ConsumerKeyboard.press(KEY_VOLUME_DECREMENT);
-      //ConsumerKeyboard.release();
-      //clearMute(&muted, &muted_timer);
-      //Keyboard.write(KEY_VOLUME_DECREMENT);
-      //Serial.println("KEY_VOLUME_DEC");
       Keyboard.consumerPress(KEY_VOLUME_DECREMENT);
-      delay(100);
       Keyboard.consumerRelease();
-
+      clearMuteFlag(&muted, &muted_timer);
       break;
 
     case SIG_VOL_INC:
-//      ConsumerKeyboard.press(KEY_VOLUME_INCREMENT);
-//      ConsumerKeyboard.release();
-      //clearMute(&muted, &muted_timer);
-      //Keyboard.write(KEY_VOLUME_INCREMENT);
-      //Serial.println("KEY_VOLUME_INCR");
       Keyboard.consumerPress(KEY_VOLUME_INCREMENT);
-      delay(100);
       Keyboard.consumerRelease();
-
+      clearMuteFlag(&muted, &muted_timer);
       break;
 
-    // case SIG_TICK:
-    //   if (muted_timer) {
-    //     if (--muted_timer_ticks < 1) {
-    //       clearMute(&muted, &muted_timer);
-    //       ConsumerKeyboard.press(KEY_MUTE);
-    //       ConsumerKeyboard.release();
-    //       KeyColorSet(SIG_K03_DOWN, 0x00FF00);
-    //     }
-    //   }
-    //   break;
+    case SIG_TICK:
+      // button down and wait a few ticks
+      if (vol_dec_btn_is_down && ++vol_dec_wait > 3) {
+        derivedStateData->EventQueuePush(BTN_DEC_VOL_KEYDOWN);
+      }
+      if (vol_inc_btn_is_down && ++vol_inc_wait > 3) {
+        derivedStateData->EventQueuePush(BTN_INC_VOL_KEYDOWN);
+      }
+      if (muted_timer) {
+        if (--muted_timer_ticks < 1) {
+          clearMuteFlag(&muted, &muted_timer);
+          sendMuteCommand();
+          KeyColorSet(BTN_MUTE_TIMER_KEYDOWN, 0x00FF00);
+        }
+      }
+      break;
 
     default:
       return HANDLE_SUPER_STATE(stateData, &JCPMMachine::TopState);
