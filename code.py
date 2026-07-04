@@ -1,5 +1,7 @@
 """CircuitPython entry point for the MacroPad HSM port."""
 
+import gc
+import os
 import time
 
 try:
@@ -7,18 +9,10 @@ try:
 except ImportError:
     MacroPad = None
 
-import hsm as _hsm_module
-from hsm import (
-    HSM,
-    HSM_SIG_ENTRY,
-    HSM_SIG_EXIT,
-    HSM_SIG_INITIAL_TRANS,
-    StateData,
-    change_state,
-    handle_state,
-    handle_super_state,
-)
+from macropad_machine import MacroPadMachine
 from macropad_signals import (
+    SIG_ENC_CCW,
+    SIG_ENC_CW,
     SIG_ENC_DOWN,
     SIG_ENC_UP,
     SIG_K1_DOWN,
@@ -46,21 +40,11 @@ from macropad_signals import (
     SIG_K12_DOWN,
     SIG_K12_UP,
     SIG_TICK,
-    SIG_VOL_DEC,
-    SIG_VOL_INC,
 )
 
 
 KEYENC_BIT_POS = 0
 DEBUG_ENCODER_BUTTON_SIGNALS = True
-DEBUG_ENQUEUE = True
-HSM_DEBUG = True
-
-# Wire signal name lookup and debug flag into the hsm module.
-from macropad_signals import signal_name as _sig_name_fn  # noqa: E402
-_hsm_module._signal_name_fn = _sig_name_fn
-_hsm_module.HSM_DEBUG = HSM_DEBUG
-_hsm_module.trace_silence(SIG_TICK, _hsm_module.HSM_SIG_SILENT, HSM_SIG_ENTRY, HSM_SIG_EXIT)
 
 BIT_POS_TO_DOWN_SIGNAL = {
     0: SIG_ENC_DOWN,
@@ -105,6 +89,27 @@ def _debug_pressed_labels(bitmask):
             labels.append("K{}".format(key_number + 1))
 
     return labels
+
+
+def print_memory_usage(label):
+    gc.collect()
+    ram_used = gc.mem_alloc()
+    ram_free = gc.mem_free()
+    vfs = os.statvfs("/")
+    block_size = vfs[0]
+    fs_total = block_size * vfs[2]
+    fs_free = block_size * vfs[3]
+    fs_used = fs_total - fs_free
+    print(
+        "[{}]\n    RAM used={:,} free={:,}\n    FS used={:,} free={:,} total={:,}".format(
+            label,
+            ram_used,
+            ram_free,
+            fs_used,
+            fs_free,
+            fs_total,
+        )
+    )
 
 
 class MacroPadInputScanner:
@@ -187,80 +192,14 @@ class InputEventUpdater:
         self._accumulated_encoder_delta += delta
 
         while self._accumulated_encoder_delta >= self._encoder_threshold:
-            state_data.event_queue_push(SIG_VOL_DEC)
+            state_data.event_queue_push(SIG_ENC_CW)
             self._accumulated_encoder_delta -= self._encoder_threshold
 
         while self._accumulated_encoder_delta <= -self._encoder_threshold:
-            state_data.event_queue_push(SIG_VOL_INC)
+            state_data.event_queue_push(SIG_ENC_CCW)
             self._accumulated_encoder_delta += self._encoder_threshold
 
         self._prev_encoder = current_encoder
-
-
-class MacroPadStateData(StateData):
-    def __init__(self):
-        super().__init__(max_events=32)
-        self.down_color = 0xFF0000
-        self.up_color = 0x00FF00
-
-    def event_queue_push(self, signal, payload=None):
-        from macropad_signals import signal_name as _sig_name
-        from hsm import HSM_SIG_ENTRY, HSM_SIG_EXIT, HSM_SIG_INITIAL_TRANS, HSM_SIG_SILENT
-        _silent_signals = (SIG_TICK, HSM_SIG_ENTRY, HSM_SIG_EXIT, HSM_SIG_INITIAL_TRANS, HSM_SIG_SILENT)
-        if DEBUG_ENQUEUE and signal not in _silent_signals:
-            print("enqueue: {}({})".format(_sig_name(signal), signal))
-        return super().event_queue_push(signal, payload)
-
-
-class MacroPadMachine(HSM):
-    def __init__(self):
-        super().__init__()
-        self._state_data = MacroPadStateData()
-
-    def get_state_data(self):
-        return self._state_data
-
-    @staticmethod
-    def top_state(state_data, event):
-        if event.signal == HSM_SIG_ENTRY:
-            return handle_state()
-        if event.signal == HSM_SIG_EXIT:
-            return handle_state()
-        if event.signal == HSM_SIG_INITIAL_TRANS:
-            return handle_state()
-        return handle_super_state(state_data, HSM.root_state)
-
-    @staticmethod
-    def mode_ubuntu_state(state_data, event):
-        if event.signal == HSM_SIG_ENTRY:
-            print("enter mode_ubuntu_state")
-            return handle_state()
-        if event.signal == HSM_SIG_EXIT:
-            print("exit mode_ubuntu_state")
-            return handle_state()
-        if event.signal == SIG_ENC_UP:
-            print("transition -> mode_switch_apps_state")
-            return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
-        if event.signal == SIG_TICK:
-            print("mode_ubuntu_state tick")
-            return handle_state()
-        return handle_super_state(state_data, MacroPadMachine.top_state)
-
-    @staticmethod
-    def mode_switch_apps_state(state_data, event):
-        if event.signal == HSM_SIG_ENTRY:
-            print("enter mode_switch_apps_state")
-            return handle_state()
-        if event.signal == HSM_SIG_EXIT:
-            print("exit mode_switch_apps_state")
-            return handle_state()
-        if event.signal == SIG_ENC_UP:
-            print("transition -> mode_ubuntu_state")
-            return change_state(state_data, MacroPadMachine.mode_ubuntu_state)
-        if event.signal == SIG_TICK:
-            print("mode_switch_apps_state tick")
-            return handle_state()
-        return handle_super_state(state_data, MacroPadMachine.top_state)
 
 
 def main():
@@ -268,11 +207,13 @@ def main():
         raise RuntimeError("Install adafruit_macropad on CIRCUITPY/lib before running code.py")
 
     print("MacroPad HSM port starting...")
+    print_memory_usage("after imports")
     macropad = MacroPad()
     input_scanner = MacroPadInputScanner(macropad)
     machine = MacroPadMachine()
     input_event_updater = InputEventUpdater()
     machine.set_initial_state(MacroPadMachine.mode_ubuntu_state)
+    print_memory_usage("after setup")
 
     last_tick = time.monotonic()
     while True:
