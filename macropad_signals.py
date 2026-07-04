@@ -1,0 +1,73 @@
+"""Signal definitions shared by the MacroPad CircuitPython state machine."""
+
+from hsm import HSM_SIG_USER
+
+# Keep numbering aligned with the C++ enum in macropad-signals.h.
+SIG_TICK = HSM_SIG_USER
+SIG_K1_DOWN = 6
+SIG_K1_UP = 7
+SIG_K2_DOWN = 8
+SIG_K2_UP = 9
+SIG_K3_DOWN = 10
+SIG_K3_UP = 11
+SIG_K4_DOWN = 12
+SIG_K4_UP = 13
+SIG_K5_DOWN = 14
+SIG_K5_UP = 15
+SIG_K6_DOWN = 16
+SIG_K6_UP = 17
+SIG_K7_DOWN = 18
+SIG_K7_UP = 19
+SIG_K8_DOWN = 20
+SIG_K8_UP = 21
+SIG_K9_DOWN = 22
+SIG_K9_UP = 23
+SIG_K10_DOWN = 24
+SIG_K10_UP = 25
+SIG_K11_DOWN = 26
+SIG_K11_UP = 27
+SIG_K12_DOWN = 28
+SIG_K12_UP = 29
+SIG_ENC_DOWN = 30
+SIG_ENC_UP = 31
+SIG_VOL_DEC = 32
+SIG_VOL_INC = 33
+SIG_PATTERN_PRESS = 34
+SIG_LAST = 35
+
+SIGNAL_NAMES = {
+    SIG_TICK: "SIG_TICK",
+    SIG_K1_DOWN: "SIG_K1_DOWN",
+    SIG_K1_UP: "SIG_K1_UP",
+    SIG_K2_DOWN: "SIG_K2_DOWN",
+    SIG_K2_UP: "SIG_K2_UP",
+    SIG_K3_DOWN: "SIG_K3_DOWN",
+    SIG_K3_UP: "SIG_K3_UP",
+    SIG_K4_DOWN: "SIG_K4_DOWN",
+    SIG_K4_UP: "SIG_K4_UP",
+    SIG_K5_DOWN: "SIG_K5_DOWN",
+    SIG_K5_UP: "SIG_K5_UP",
+    SIG_K6_DOWN: "SIG_K6_DOWN",
+    SIG_K6_UP: "SIG_K6_UP",
+    SIG_K7_DOWN: "SIG_K7_DOWN",
+    SIG_K7_UP: "SIG_K7_UP",
+    SIG_K8_DOWN: "SIG_K8_DOWN",
+    SIG_K8_UP: "SIG_K8_UP",
+    SIG_K9_DOWN: "SIG_K9_DOWN",
+    SIG_K9_UP: "SIG_K9_UP",
+    SIG_K10_DOWN: "SIG_K10_DOWN",
+    SIG_K10_UP: "SIG_K10_UP",
+    SIG_K11_DOWN: "SIG_K11_DOWN",
+    SIG_K11_UP: "SIG_K11_UP",
+    SIG_K12_DOWN: "SIG_K12_DOWN",
+    SIG_K12_UP: "SIG_K12_UP",
+    SIG_ENC_DOWN: "SIG_ENC_DOWN",
+    SIG_ENC_UP: "SIG_ENC_UP",
+    SIG_VOL_DEC: "SIG_VOL_DEC",
+    SIG_VOL_INC: "SIG_VOL_INC",
+    SIG_PATTERN_PRESS: "SIG_PATTERN_PRESS",
+}
+
+
+def signal_name(signal):
+    return SIGNAL_NAMES.get(signal, "UNKNOWN_SIGNAL")
