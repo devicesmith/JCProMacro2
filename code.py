@@ -210,7 +210,7 @@ def main():
     print_memory_usage("after imports")
     macropad = MacroPad()
     input_scanner = MacroPadInputScanner(macropad)
-    machine = MacroPadMachine()
+    machine = MacroPadMachine(macropad)
     input_event_updater = InputEventUpdater()
     machine.set_initial_state(MacroPadMachine.mode_ubuntu_state)
     print_memory_usage("after setup")
