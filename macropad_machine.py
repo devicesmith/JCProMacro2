@@ -5,10 +5,12 @@ try:
     import usb_hid  # type: ignore[import-not-found]
     from adafruit_hid.consumer_control import ConsumerControl  # type: ignore[import-not-found]
     from adafruit_hid.consumer_control_code import ConsumerControlCode  # type: ignore[import-not-found]
+    from adafruit_hid.keycode import Keycode  # type: ignore[import-not-found]
 except ImportError:
     usb_hid = None
     ConsumerControl = None
     ConsumerControlCode = None
+    Keycode = None
 
 from hsm import (
     HSM,
@@ -129,11 +131,25 @@ class MacroPadMachine(HSM):
         self._state_data = MacroPadStateData()
         self._state_data.machine = self
         self._pixels = None
+        self._keyboard = None
+        self._keyboard_layout = None
         if macropad is not None and hasattr(macropad, "pixels"):
             self._pixels = macropad.pixels
             self._pixels.brightness = REGULAR_BRIGHTNESS
+        if macropad is not None and hasattr(macropad, "keyboard"):
+            self._keyboard = macropad.keyboard
+        if macropad is not None and hasattr(macropad, "keyboard_layout"):
+            self._keyboard_layout = macropad.keyboard_layout
         self.TICK_INTERVAL = 0.1
         self.TICKS_PER_SECOND = int(1.0 / self.TICK_INTERVAL)
+
+    def _send_keyboard_text(self, text, press_enter=False):
+        if self._keyboard_layout is None:
+            print("keyboard text skipped: keyboard_layout not available")
+            return
+        self._keyboard_layout.write(text)
+        if press_enter and self._keyboard is not None and Keycode is not None:
+            self._keyboard.send(Keycode.ENTER)
 
     def _clearMuteFlagAndIndicator(self):
         self._state_data.is_muted = False
@@ -245,6 +261,14 @@ class MacroPadMachine(HSM):
         if event.signal == sig.SIG_VOL_UP_BTN_DN:
 
             return handle_state()
+
+        if event.signal == sig.SIG_PW1:
+            machine._send_keyboard_text("PW1", press_enter=True)
+            return handle_state()
+        if event.signal == sig.SIG_PW2:
+            machine._send_keyboard_text("PW2", press_enter=True)
+            return handle_state()
+
         
         return handle_super_state(state_data, HSM.root_state)
 
@@ -345,6 +369,12 @@ class MacroPadMachine(HSM):
         if event.signal == sig.SIG_TICK:
             return handle_state()
         if event.signal == sig.SIG_K1_DOWN:
+            machine.event_queue_push(sig.SIG_PW1)
+            return handle_state()
+        if event.signal == sig.SIG_K2_DOWN:
+            machine.event_queue_push(sig.SIG_PW2)
+            return handle_state()
+        if event.signal == sig.SIG_K3_DOWN:
             print("switch to log_ubuntu_in")
             return change_state(state_data, MacroPadMachine.log_ubuntu_in)
         return handle_super_state(state_data, MacroPadMachine.top_state)
@@ -371,16 +401,8 @@ class MacroPadMachine(HSM):
                 machine.event_queue_push(sig.SIG_PW2)
             if state_data.pw_tick_count > 8 * machine.TICKS_PER_SECOND:
                 return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
-                
-            return handle_state()
-        if event.signal == sig.SIG_PW1:
-            print("PW1")
-            return handle_state()
-        if event.signal == sig.SIG_PW2:
-            print("PW2")
             return handle_state()
         if event.signal == sig.SIG_K1_DOWN:
-            print("switch to app 1")
             return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
 
         return handle_super_state(state_data, MacroPadMachine.top_state)
