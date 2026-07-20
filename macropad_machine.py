@@ -1,5 +1,7 @@
 """MacroPad-specific hierarchical state machine implementation."""
 
+MACROPAD_MACHINE_VERSION = "0.1.0"
+
 import hsm as _hsm_module
 try:
     import usb_hid  # type: ignore[import-not-found]
@@ -33,6 +35,8 @@ REGULAR_BRIGHTNESS = 0.50
 HIGH_BRIGHTNESS = 1.00
 VOL_BTN_TICK_THRESHOLD = 4  # Number of ticks before sending repeated volume change events
 MUTE_TIMER_SECONDS = 30
+PW1 = "PW1"
+PW2 = "PW2"
 
 #_hsm_module._signal_name_fn = _sig_name_fn
 _hsm_module._signal_name_fn = sig.signal_name
@@ -259,14 +263,13 @@ class MacroPadMachine(HSM):
             return handle_state()
 
         if event.signal == sig.SIG_VOL_UP_BTN_DN:
-
             return handle_state()
 
         if event.signal == sig.SIG_PW1:
-            machine._send_keyboard_text("PW1", press_enter=True)
+            machine._send_keyboard_text(PW1, press_enter=True)
             return handle_state()
         if event.signal == sig.SIG_PW2:
-            machine._send_keyboard_text("PW2", press_enter=True)
+            machine._send_keyboard_text(PW2, press_enter=True)
             return handle_state()
 
         
