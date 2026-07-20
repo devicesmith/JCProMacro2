@@ -30,6 +30,7 @@ HSM_DEBUG = True
 REGULAR_BRIGHTNESS = 0.50
 HIGH_BRIGHTNESS = 1.00
 VOL_BTN_TICK_THRESHOLD = 4  # Number of ticks before sending repeated volume change events
+MUTE_TIMER_SECONDS = 30
 
 #_hsm_module._signal_name_fn = _sig_name_fn
 _hsm_module._signal_name_fn = sig.signal_name
@@ -73,6 +74,7 @@ class MacroPadStateData(StateData):
         self.vol_up_btn_is_dn = False
         self.vol_btn_tick_count = 0
         self.pw_tick_count = 0
+        self.mute_timer_ticks_remaining = 0
 
     def event_queue_push(self, signal, payload=None):
         silent_signals = (
@@ -136,10 +138,14 @@ class MacroPadMachine(HSM):
     def _clearMuteFlagAndIndicator(self):
         self._state_data.is_muted = False
         self.set_key_color(sig.SIG_MUTE_BTN, self._state_data.up_color)
+        self.set_key_color(sig.SIG_MUTE_TMR_BTN, self._state_data.up_color)
 
     def _apply_mute_indicator(self):
-        mute_color = 0xFF0000 if self._state_data.is_muted else self._state_data.up_color
+        timer_running = self._state_data.mute_timer_ticks_remaining > 0
+        mute_color = 0xFF0000 if self._state_data.is_muted and not timer_running else self._state_data.up_color
+        timer_color = 0xFF0000 if timer_running else self._state_data.up_color
         self.set_key_color(sig.SIG_MUTE_BTN, mute_color)
+        self.set_key_color(sig.SIG_MUTE_TMR_BTN, timer_color)
 
     def toggle_mute(self):
         _send_mute_toggle()
@@ -149,6 +155,23 @@ class MacroPadMachine(HSM):
     def clear_mute(self):
         if self._state_data.is_muted:
             self.toggle_mute()
+
+    def _cancel_mute_timer(self):
+        if self._state_data.mute_timer_ticks_remaining > 0:
+            self._state_data.mute_timer_ticks_remaining = 0
+            self._apply_mute_indicator()
+
+    def _start_or_extend_mute_timer(self):
+        timer_ticks = MUTE_TIMER_SECONDS * self.TICKS_PER_SECOND
+        if self._state_data.mute_timer_ticks_remaining <= 0:
+            self._state_data.mute_timer_ticks_remaining = timer_ticks
+            if not self._state_data.is_muted:
+                self.toggle_mute()
+            else:
+                self._apply_mute_indicator()
+            return
+        self._state_data.mute_timer_ticks_remaining += timer_ticks
+        self._apply_mute_indicator()
 
     def set_all_key_colors(self, color):
         if self._pixels is None:
@@ -194,9 +217,8 @@ class MacroPadMachine(HSM):
             sig.SIG_K7_DOWN,
             sig.SIG_K8_DOWN,
             sig.SIG_K9_DOWN,
-            sig.SIG_K10_DOWN,
-            sig.SIG_K11_DOWN,
-            #sig.SIG_K12_DOWN,
+            sig.SIG_VOL_DN_BTN_DN,
+            sig.SIG_VOL_UP_BTN_DN,
         ):
             machine.set_key_color(event.signal, state_data.down_color)
             return handle_state()
@@ -210,9 +232,8 @@ class MacroPadMachine(HSM):
             sig.SIG_K7_UP,
             sig.SIG_K8_UP,
             sig.SIG_K9_UP,
-            sig.SIG_K10_UP,
-            sig.SIG_K11_UP,
-            #sig.SIG_K12_UP,
+            sig.SIG_VOL_DN_BTN_UP,
+            sig.SIG_VOL_UP_BTN_UP,
         ):
             machine.set_key_color(event.signal, state_data.up_color)
             return handle_state()
@@ -245,36 +266,55 @@ class MacroPadMachine(HSM):
             print("transition -> mode_switch_apps_state")
             return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
         if event.signal == sig.SIG_VOL_KNOB_DOWN:
+            machine._cancel_mute_timer()
             machine.clear_mute()
             _send_volume_down()
             return handle_state()
         if event.signal == sig.SIG_VOL_KNOB_UP:
+            machine._cancel_mute_timer()
             machine.clear_mute()
             _send_volume_up()
             return handle_state()
         if event.signal == sig.SIG_VOL_DN_BTN_DN:
+            machine._cancel_mute_timer()
             machine.clear_mute()
             machine._state_data.vol_dn_btn_is_dn = True
             _send_volume_down()
-            return handle_state()
+            #return handle_state()
+            return handle_super_state(state_data, MacroPadMachine.top_state)
         if event.signal == sig.SIG_VOL_UP_BTN_DN:
+            machine._cancel_mute_timer()
             machine.clear_mute()
             machine._state_data.vol_up_btn_is_dn = True
             _send_volume_up()
-            return handle_state()
+            return handle_super_state(state_data, MacroPadMachine.top_state)
         if event.signal == sig.SIG_VOL_DN_BTN_UP:
             machine._state_data.vol_dn_btn_is_dn = False
             machine._state_data.vol_btn_tick_count = 0
-            return handle_state()
+            return handle_super_state(state_data, MacroPadMachine.top_state)
         if event.signal == sig.SIG_VOL_UP_BTN_UP:
             machine._state_data.vol_up_btn_is_dn = False
             machine._state_data.vol_btn_tick_count = 0
-            return handle_state()
+            return handle_super_state(state_data, MacroPadMachine.top_state)
         if event.signal == sig.SIG_MUTE_BTN:
-            machine.toggle_mute()
-            #machine._apply_mute_indicator()
+            if machine._state_data.mute_timer_ticks_remaining > 0 or machine._state_data.is_muted:
+                machine._cancel_mute_timer()
+                machine.clear_mute()
+            else:
+                machine.toggle_mute()
+            return handle_state()
+        if event.signal == sig.SIG_MUTE_TMR_BTN:
+            machine._start_or_extend_mute_timer()
+            return handle_state()
+        if event.signal == sig.SIG_K9_UP:
+            machine._apply_mute_indicator()
             return handle_state()
         if event.signal == sig.SIG_TICK:
+            if machine._state_data.mute_timer_ticks_remaining > 0:
+                machine._state_data.mute_timer_ticks_remaining -= 1
+                if machine._state_data.mute_timer_ticks_remaining <= 0:
+                    machine._state_data.mute_timer_ticks_remaining = 0
+                    machine.clear_mute()
             if machine._state_data.vol_dn_btn_is_dn:
                 machine._state_data.vol_btn_tick_count += 1
                 if machine._state_data.vol_btn_tick_count > VOL_BTN_TICK_THRESHOLD:
