@@ -21,52 +21,20 @@ from hsm import (
     handle_state,
     handle_super_state,
 )
-from macropad_signals import (
-    SIG_ENC_UP,
-    SIG_K1_DOWN,
-    SIG_K1_UP,
-    SIG_K2_DOWN,
-    SIG_K2_UP,
-    SIG_K3_DOWN,
-    SIG_K3_UP,
-    SIG_K4_DOWN,
-    SIG_K4_UP,
-    SIG_K5_DOWN,
-    SIG_K5_UP,
-    SIG_K6_DOWN,
-    SIG_K6_UP,
-    SIG_K7_DOWN,
-    SIG_K7_UP,
-    SIG_K8_DOWN,
-    SIG_K8_UP,
-    SIG_K9_DOWN,
-    SIG_K9_UP,
-    SIG_K10_DOWN,
-    SIG_K10_UP,
-    SIG_K11_DOWN,
-    SIG_K11_UP,
-    SIG_K12_DOWN,
-    SIG_K12_UP,
-    SIG_TICK,
-    SIG_VOL_KNOB_DOWN,
-    SIG_VOL_KNOB_UP,
-    SIG_VOL_BTN_DOWN,
-    SIG_VOL_BTN_UP,
-    SIG_MUTE_BTN,
-    SIG_ENC_DOWN,
-    signal_name as _sig_name_fn,
-)
 
+import macropad_signals as sig
 
 DEBUG_ENQUEUE = True
 HSM_DEBUG = True
 
 REGULAR_BRIGHTNESS = 0.50
 HIGH_BRIGHTNESS = 1.00
+VOL_BTN_TICK_THRESHOLD = 4  # Number of ticks before sending repeated volume change events
 
-_hsm_module._signal_name_fn = _sig_name_fn
+#_hsm_module._signal_name_fn = _sig_name_fn
+_hsm_module._signal_name_fn = sig.signal_name
 _hsm_module.HSM_DEBUG = HSM_DEBUG
-_hsm_module.trace_silence(SIG_TICK, _hsm_module.HSM_SIG_SILENT, HSM_SIG_ENTRY, HSM_SIG_EXIT)
+_hsm_module.trace_silence(sig.SIG_TICK, _hsm_module.HSM_SIG_SILENT, HSM_SIG_ENTRY, HSM_SIG_EXIT)
 
 
 if ConsumerControl is not None and usb_hid is not None:
@@ -101,46 +69,50 @@ class MacroPadStateData(StateData):
         self.down_color = 0xFF0000
         self.up_color = 0x00FF00
         self.is_muted = False
+        self.vol_dn_btn_is_dn = False
+        self.vol_up_btn_is_dn = False
+        self.vol_btn_tick_count = 0
+        self.pw_tick_count = 0
 
     def event_queue_push(self, signal, payload=None):
         silent_signals = (
-            SIG_TICK,
+            sig.SIG_TICK,
             HSM_SIG_ENTRY,
             HSM_SIG_EXIT,
             HSM_SIG_INITIAL_TRANS,
             HSM_SIG_SILENT,
         )
         if DEBUG_ENQUEUE and signal not in silent_signals:
-            print("enqueue: {}({})".format(_sig_name_fn(signal), signal))
+            print("enqueue: {}({})".format(sig.signal_name(signal), signal))
         return super().event_queue_push(signal, payload)
 
 
 def _signal_to_order(signal):
     signal_to_order_map = {
-        SIG_K1_DOWN: 0,
-        SIG_K1_UP: 0,
-        SIG_K2_DOWN: 1,
-        SIG_K2_UP: 1,
-        SIG_K3_DOWN: 2,
-        SIG_K3_UP: 2,
-        SIG_K4_DOWN: 3,
-        SIG_K4_UP: 3,
-        SIG_K5_DOWN: 4,
-        SIG_K5_UP: 4,
-        SIG_K6_DOWN: 5,
-        SIG_K6_UP: 5,
-        SIG_K7_DOWN: 6,
-        SIG_K7_UP: 6,
-        SIG_K8_DOWN: 7,
-        SIG_K8_UP: 7,
-        SIG_K9_DOWN: 8,
-        SIG_K9_UP: 8,
-        SIG_K10_DOWN: 9,
-        SIG_K10_UP: 9,
-        SIG_K11_DOWN: 10,
-        SIG_K11_UP: 10,
-        SIG_K12_DOWN: 11,
-        SIG_K12_UP: 11,
+        sig.SIG_K1_DOWN: 0,
+        sig.SIG_K1_UP: 0,
+        sig.SIG_K2_DOWN: 1,
+        sig.SIG_K2_UP: 1,
+        sig.SIG_K3_DOWN: 2,
+        sig.SIG_K3_UP: 2,
+        sig.SIG_K4_DOWN: 3,
+        sig.SIG_K4_UP: 3,
+        sig.SIG_K5_DOWN: 4,
+        sig.SIG_K5_UP: 4,
+        sig.SIG_K6_DOWN: 5,
+        sig.SIG_K6_UP: 5,
+        sig.SIG_K7_DOWN: 6,
+        sig.SIG_K7_UP: 6,
+        sig.SIG_K8_DOWN: 7,
+        sig.SIG_K8_UP: 7,
+        sig.SIG_K9_DOWN: 8,
+        sig.SIG_K9_UP: 8,
+        sig.SIG_K10_DOWN: 9,
+        sig.SIG_K10_UP: 9,
+        sig.SIG_K11_DOWN: 10,
+        sig.SIG_K11_UP: 10,
+        sig.SIG_K12_DOWN: 11,
+        sig.SIG_K12_UP: 11,
     }
     return signal_to_order_map.get(signal, -1)
 
@@ -158,14 +130,16 @@ class MacroPadMachine(HSM):
         if macropad is not None and hasattr(macropad, "pixels"):
             self._pixels = macropad.pixels
             self._pixels.brightness = REGULAR_BRIGHTNESS
+        self.TICK_INTERVAL = 0.1
+        self.TICKS_PER_SECOND = int(1.0 / self.TICK_INTERVAL)
 
     def _clearMuteFlagAndIndicator(self):
         self._state_data.is_muted = False
-        self.set_key_color(SIG_MUTE_BTN, self._state_data.up_color)
+        self.set_key_color(sig.SIG_MUTE_BTN, self._state_data.up_color)
 
     def _apply_mute_indicator(self):
         mute_color = 0xFF0000 if self._state_data.is_muted else self._state_data.up_color
-        self.set_key_color(SIG_MUTE_BTN, mute_color)
+        self.set_key_color(sig.SIG_MUTE_BTN, mute_color)
 
     def toggle_mute(self):
         _send_mute_toggle()
@@ -211,41 +185,46 @@ class MacroPadMachine(HSM):
         if event.signal == HSM_SIG_INITIAL_TRANS:
             return handle_state()
         if event.signal in (
-            SIG_K1_DOWN,
-            SIG_K2_DOWN,
-            SIG_K3_DOWN,
-            SIG_K4_DOWN,
-            SIG_K5_DOWN,
-            SIG_K6_DOWN,
-            SIG_K7_DOWN,
-            SIG_K8_DOWN,
-            SIG_K9_DOWN,
-            SIG_K10_DOWN,
-            SIG_K11_DOWN,
-            #SIG_K12_DOWN,
+            sig.SIG_K1_DOWN,
+            sig.SIG_K2_DOWN,
+            sig.SIG_K3_DOWN,
+            sig.SIG_K4_DOWN,
+            sig.SIG_K5_DOWN,
+            sig.SIG_K6_DOWN,
+            sig.SIG_K7_DOWN,
+            sig.SIG_K8_DOWN,
+            sig.SIG_K9_DOWN,
+            sig.SIG_K10_DOWN,
+            sig.SIG_K11_DOWN,
+            #sig.SIG_K12_DOWN,
         ):
             machine.set_key_color(event.signal, state_data.down_color)
             return handle_state()
         if event.signal in (
-            SIG_K1_UP,
-            SIG_K2_UP,
-            SIG_K3_UP,
-            SIG_K4_UP,
-            SIG_K5_UP,
-            SIG_K6_UP,
-            SIG_K7_UP,
-            SIG_K8_UP,
-            SIG_K9_UP,
-            SIG_K10_UP,
-            SIG_K11_UP,
-            #SIG_K12_UP,
+            sig.SIG_K1_UP,
+            sig.SIG_K2_UP,
+            sig.SIG_K3_UP,
+            sig.SIG_K4_UP,
+            sig.SIG_K5_UP,
+            sig.SIG_K6_UP,
+            sig.SIG_K7_UP,
+            sig.SIG_K8_UP,
+            sig.SIG_K9_UP,
+            sig.SIG_K10_UP,
+            sig.SIG_K11_UP,
+            #sig.SIG_K12_UP,
         ):
             machine.set_key_color(event.signal, state_data.up_color)
             return handle_state()
-        if event.signal == SIG_ENC_DOWN:
+        if event.signal == sig.SIG_ENC_DOWN:
             machine.set_keys_brightness(HIGH_BRIGHTNESS)
             machine.set_key_color(event.signal, state_data.down_color)
             return handle_state()
+
+        if event.signal == sig.SIG_VOL_UP_BTN_DN:
+
+            return handle_state()
+        
         return handle_super_state(state_data, HSM.root_state)
 
     @staticmethod
@@ -262,22 +241,48 @@ class MacroPadMachine(HSM):
         if event.signal == HSM_SIG_EXIT:
             print("exit mode_ubuntu_state")
             return handle_state()
-        if event.signal == SIG_ENC_UP:
+        if event.signal == sig.SIG_ENC_UP:
             print("transition -> mode_switch_apps_state")
             return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
-        if event.signal == SIG_VOL_KNOB_DOWN or event.signal == SIG_VOL_BTN_DOWN:
+        if event.signal == sig.SIG_VOL_KNOB_DOWN:
             machine.clear_mute()
             _send_volume_down()
             return handle_state()
-        if event.signal == SIG_VOL_KNOB_UP or event.signal == SIG_VOL_BTN_UP:
+        if event.signal == sig.SIG_VOL_KNOB_UP:
             machine.clear_mute()
             _send_volume_up()
             return handle_state()
-        if event.signal == SIG_MUTE_BTN:
-            machine.toggle_mute()
-            machine._apply_mute_indicator()
+        if event.signal == sig.SIG_VOL_DN_BTN_DN:
+            machine.clear_mute()
+            machine._state_data.vol_dn_btn_is_dn = True
+            _send_volume_down()
             return handle_state()
-        if event.signal == SIG_TICK:
+        if event.signal == sig.SIG_VOL_UP_BTN_DN:
+            machine.clear_mute()
+            machine._state_data.vol_up_btn_is_dn = True
+            _send_volume_up()
+            return handle_state()
+        if event.signal == sig.SIG_VOL_DN_BTN_UP:
+            machine._state_data.vol_dn_btn_is_dn = False
+            machine._state_data.vol_btn_tick_count = 0
+            return handle_state()
+        if event.signal == sig.SIG_VOL_UP_BTN_UP:
+            machine._state_data.vol_up_btn_is_dn = False
+            machine._state_data.vol_btn_tick_count = 0
+            return handle_state()
+        if event.signal == sig.SIG_MUTE_BTN:
+            machine.toggle_mute()
+            #machine._apply_mute_indicator()
+            return handle_state()
+        if event.signal == sig.SIG_TICK:
+            if machine._state_data.vol_dn_btn_is_dn:
+                machine._state_data.vol_btn_tick_count += 1
+                if machine._state_data.vol_btn_tick_count > VOL_BTN_TICK_THRESHOLD:
+                    _send_volume_down()
+            if machine._state_data.vol_up_btn_is_dn:
+                machine._state_data.vol_btn_tick_count += 1
+                if machine._state_data.vol_btn_tick_count > VOL_BTN_TICK_THRESHOLD:
+                    _send_volume_up()
             return handle_state()
         return handle_super_state(state_data, MacroPadMachine.top_state)
 
@@ -294,9 +299,48 @@ class MacroPadMachine(HSM):
         if event.signal == HSM_SIG_EXIT:
             print("exit mode_switch_apps_state")
             return handle_state()
-        if event.signal == SIG_ENC_UP:
+        if event.signal == sig.SIG_ENC_UP:
             print("transition -> mode_ubuntu_state")
             return change_state(state_data, MacroPadMachine.mode_ubuntu_state)
-        if event.signal == SIG_TICK:
+        if event.signal == sig.SIG_TICK:
             return handle_state()
+        if event.signal == sig.SIG_K1_DOWN:
+            print("switch to log_ubuntu_in")
+            return change_state(state_data, MacroPadMachine.log_ubuntu_in)
+        return handle_super_state(state_data, MacroPadMachine.top_state)
+    
+    @staticmethod
+    def log_ubuntu_in(state_data, event):
+        machine = state_data.machine
+        if event.signal == HSM_SIG_ENTRY:
+            print("enter log_ubuntu_in")
+            state_data.down_color = 0xFF0000
+            state_data.up_color = 0xFFA500
+            machine.set_keys_brightness(REGULAR_BRIGHTNESS)
+            machine.set_all_key_colors(state_data.up_color)
+            return handle_state()
+        if event.signal == HSM_SIG_EXIT:
+            state_data.pw_tick_count = 0
+            print("exit log_ubuntu_in")
+            return handle_state()
+        if event.signal == sig.SIG_TICK:
+            state_data.pw_tick_count += 1
+            if state_data.pw_tick_count == 2 * machine.TICKS_PER_SECOND:
+                machine.event_queue_push(sig.SIG_PW1)
+            if state_data.pw_tick_count == 4 * machine.TICKS_PER_SECOND:
+                machine.event_queue_push(sig.SIG_PW2)
+            if state_data.pw_tick_count > 8 * machine.TICKS_PER_SECOND:
+                return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
+                
+            return handle_state()
+        if event.signal == sig.SIG_PW1:
+            print("PW1")
+            return handle_state()
+        if event.signal == sig.SIG_PW2:
+            print("PW2")
+            return handle_state()
+        if event.signal == sig.SIG_K1_DOWN:
+            print("switch to app 1")
+            return change_state(state_data, MacroPadMachine.mode_switch_apps_state)
+
         return handle_super_state(state_data, MacroPadMachine.top_state)

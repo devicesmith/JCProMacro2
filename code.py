@@ -222,7 +222,7 @@ def main():
         input_event_updater.update_key_events(keys, machine.get_state_data())
         input_event_updater.update_encoder_events(encoder, machine.get_state_data())
         now = time.monotonic()
-        if now - last_tick >= 1.0:
+        if now - last_tick >= machine.TICK_INTERVAL:
             machine.event_queue_push(SIG_TICK)
             last_tick = now
 
